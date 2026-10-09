@@ -45,9 +45,9 @@ flowchart LR
 │   ├── alembic/         # database migrations (badges/skills seeded)
 │   ├── tests/           # pytest suite (fake LLM, no network)
 │   ├── requirements.txt
-│   ├── render.yaml      # Render Blueprint
 │   ├── .env.example     # documented template (safe to commit)
 │   └── .env             # real secrets (git-ignored, never committed)
+├── render.yaml          # Render Blueprint (repo root, auto-detected)
 └── README.md
 ```
 
