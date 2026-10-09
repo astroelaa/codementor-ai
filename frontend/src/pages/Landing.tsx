@@ -64,7 +64,7 @@ const BENTO = [
     icon: MessagesSquare,
     title: "Socratic debugging",
     body: "The mentor diagnoses your bug privately, then leads you to it with one question at a time. The answer is always yours.",
-    span: "md:col-span-2",
+    span: "sm:col-span-2",
     mock: (
       <div className="mt-4 rounded-xl border border-(--border) bg-(--bg-soft) p-4 text-sm">
         <p className="text-(--muted)">Mentor</p>
@@ -109,7 +109,7 @@ const BENTO = [
     icon: Route,
     title: "Learning path",
     body: "Your weak spots become a prioritised path with progress tracking — generated from real sessions, not guesses.",
-    span: "md:col-span-2",
+    span: "sm:col-span-2",
     mock: (
       <div className="mt-4 flex flex-col gap-2 text-[13px]" aria-hidden="true">
         {["Guard clauses", "Edge cases: empty input", "Writing your own test cases"].map((t, i) => (
@@ -161,13 +161,13 @@ export function Landing() {
       {/* ---------- hero ---------- */}
       <section className="relative overflow-hidden">
         <div className="bg-grid pointer-events-none absolute inset-0" aria-hidden="true" />
-        <div className="relative mx-auto grid w-[min(1200px,92%)] items-center gap-12 py-20 md:grid-cols-[1.05fr_1fr] md:py-28">
+        <div className="relative mx-auto grid w-[min(1200px,92%)] items-center gap-12 py-24 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:py-32">
           <div>
             <Reveal>
-              <p className="eyebrow">Socratic debugging mentor</p>
+              <span className="pill">Socratic debugging mentor</span>
             </Reveal>
             <Reveal delay={0.05}>
-              <h1 className="mt-4 text-[clamp(2.4rem,5.5vw,4rem)] font-extrabold leading-[1.05] tracking-tight">
+              <h1 className="display mt-5">
                 Stop copying fixes.
                 <br />
                 <span className="text-(--accent-text)">Start understanding bugs.</span>
@@ -191,7 +191,7 @@ export function Landing() {
               </div>
             </Reveal>
             <Reveal delay={0.2}>
-              <div className="mt-10 flex gap-10">
+              <div className="mt-10 flex flex-wrap gap-x-10 gap-y-6">
                 {[
                   { v: 1, s: "", label: "question at a time" },
                   { v: 3, s: "", label: "hints per session" },
@@ -218,10 +218,10 @@ export function Landing() {
 
       {/* ---------- how it works ---------- */}
       <section id="how" className="border-t border-(--border) bg-(--bg-soft)">
-        <div className="mx-auto w-[min(1200px,92%)] py-20 md:py-24">
+        <div className="mx-auto w-[min(1200px,92%)] py-24 md:py-32">
           <Reveal>
             <p className="eyebrow">How it works</p>
-            <h2 className="mt-3 max-w-xl text-3xl font-extrabold tracking-tight md:text-4xl">
+            <h2 className="h2-serif mt-3 max-w-xl text-3xl md:text-[2.75rem]">
               From “it’s broken” to “I know exactly why”
             </h2>
           </Reveal>
@@ -250,14 +250,14 @@ export function Landing() {
 
       {/* ---------- bento features ---------- */}
       <section id="features" className="border-t border-(--border)">
-        <div className="mx-auto w-[min(1200px,92%)] py-20 md:py-24">
+        <div className="mx-auto w-[min(1200px,92%)] py-24 md:py-32">
           <Reveal>
             <p className="eyebrow">Features</p>
-            <h2 className="mt-3 max-w-xl text-3xl font-extrabold tracking-tight md:text-4xl">
+            <h2 className="h2-serif mt-3 max-w-xl text-3xl md:text-[2.75rem]">
               Teaching mechanics, not a chat wrapper
             </h2>
           </Reveal>
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {BENTO.map((f, i) => (
               <Reveal key={f.title} delay={(i % 3) * 0.06} className={f.span}>
                 <article className="card card-hover h-full p-6">
@@ -276,10 +276,10 @@ export function Landing() {
 
       {/* ---------- method ---------- */}
       <section id="method" className="border-t border-(--border) bg-(--bg-soft)">
-        <div className="mx-auto grid w-[min(1200px,92%)] items-center gap-12 py-20 md:grid-cols-2 md:py-24">
+        <div className="mx-auto grid w-[min(1200px,92%)] items-center gap-12 py-24 md:py-32 lg:grid-cols-2">
           <Reveal>
             <p className="eyebrow">The learning method</p>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight md:text-4xl">
+            <h2 className="h2-serif mt-3 text-3xl md:text-[2.75rem]">
               Being handed an answer is not understanding
             </h2>
             <div className="mt-6 flex flex-col gap-5">
@@ -332,10 +332,10 @@ export function Landing() {
 
       {/* ---------- faq ---------- */}
       <section id="faq" className="border-t border-(--border)">
-        <div className="mx-auto w-[min(820px,92%)] py-20 md:py-24">
+        <div className="mx-auto w-[min(880px,92%)] py-24 md:py-32">
           <Reveal>
             <p className="eyebrow">FAQ</p>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight md:text-4xl">
+            <h2 className="h2-serif mt-3 text-3xl md:text-[2.75rem]">
               Questions, answered
             </h2>
           </Reveal>
@@ -349,24 +349,46 @@ export function Landing() {
 
       {/* ---------- final CTA ---------- */}
       <section className="border-t border-(--border) bg-(--bg-soft)">
-        <div className="mx-auto w-[min(820px,92%)] py-20 text-center md:py-24">
+        <div className="mx-auto w-[min(1200px,92%)] py-24 md:py-32">
           <Reveal>
-            <h2 className="text-3xl font-extrabold tracking-tight md:text-4xl">
-              Your next bug is a lesson.
-              <br />
-              <span className="text-(--accent-text)">Learn it properly.</span>
-            </h2>
-            <p className="mx-auto mt-4 max-w-md text-(--muted)">
-              One free guest session, no account needed. The mentor is waiting with
-              exactly one question.
-            </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link to="/app" className="btn btn-primary px-7 py-3.5 text-base">
-                Start debugging free <ArrowRight size={17} strokeWidth={1.5} />
-              </Link>
-              <Link to="/signup" className="btn btn-ghost px-7 py-3.5 text-base">
-                Create an account
-              </Link>
+            <div className="card relative grid gap-10 overflow-hidden p-8 md:grid-cols-[1.1fr_1fr] md:p-12">
+              <div className="glow-accent pointer-events-none absolute -right-24 -top-24 h-72 w-72" aria-hidden="true" />
+              <div className="relative">
+                <p className="eyebrow">Get started</p>
+                <h2 className="h2-serif mt-3 text-3xl md:text-[2.75rem]">
+                  Your next bug is a lesson.
+                  <br />
+                  <span className="text-(--accent-text)">Learn it properly.</span>
+                </h2>
+                <p className="mt-4 max-w-md leading-relaxed text-(--muted)">
+                  One free guest session, no account needed. The mentor is waiting with
+                  exactly one question.
+                </p>
+                <div className="mt-8 flex flex-wrap gap-3">
+                  <Link to="/app" className="btn btn-primary px-7 py-3.5 text-base">
+                    Start debugging free <ArrowRight size={17} strokeWidth={1.5} />
+                  </Link>
+                  <Link to="/signup" className="btn btn-ghost px-7 py-3.5 text-base">
+                    Create an account
+                  </Link>
+                </div>
+              </div>
+              <div className="relative rounded-2xl border border-(--border) bg-(--bg-soft) p-6">
+                <p className="label">What you get</p>
+                <ul className="mt-1 flex flex-col gap-3 text-sm">
+                  {[
+                    "One guiding question at a time — never the answer",
+                    "A budget of 3 hints per session",
+                    "Misconceptions named and tracked",
+                    "Solved only when you explain the fix",
+                  ].map((t) => (
+                    <li key={t} className="flex items-start gap-2.5">
+                      <Check size={16} strokeWidth={2} className="mt-0.5 shrink-0 text-(--success)" />
+                      <span className="text-(--muted)">{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </Reveal>
         </div>

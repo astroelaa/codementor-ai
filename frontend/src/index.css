@@ -3,6 +3,7 @@
 @theme {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-serif: "Times New Roman", Times, Georgia, serif;
   --color-accent: #7c5cff;
 }
 
@@ -229,6 +230,49 @@ body {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent-text);
+}
+/* Bordered pill for hero badges and section labels. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  background: var(--surface);
+}
+
+/* ---------- editorial type scale ----------
+   Serif (Times New Roman, Georgia fallback) is reserved for display
+   headings and long-form reading. UI controls, forms, code and data
+   stay sans / mono. */
+.display {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.04;
+  font-size: clamp(2.75rem, 5.5vw, 4.35rem);
+}
+.h2-serif {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.12;
+}
+.serif-answer {
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  line-height: 1.65;
+}
+.serif-body {
+  font-family: var(--font-serif);
+  font-size: 1.07rem;
+  line-height: 1.7;
 }
 .skeleton {
   border-radius: 8px;

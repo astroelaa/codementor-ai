@@ -334,7 +334,7 @@ export function Workspace() {
       )}
 
       {!guestCapped && (
-        <div className="mt-6 grid items-start gap-5 lg:grid-cols-[1fr_1fr_280px]">
+        <div className="mt-6 grid items-start gap-5 lg:grid-cols-[1.1fr_1fr] xl:grid-cols-[1fr_1fr_280px]">
           {/* ---------- editor ---------- */}
           <Reveal className="min-w-0">
             <div className="card overflow-hidden">
@@ -468,9 +468,9 @@ export function Workspace() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2 border-t border-(--border) p-3">
+              <div className="flex min-w-0 gap-2 border-t border-(--border) p-3">
                 <input
-                  className="input"
+                  className="input min-w-0"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {

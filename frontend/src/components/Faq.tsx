@@ -38,7 +38,7 @@ export function Faq({ items }: { items: FaqItem[] }) {
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.25 }}
                 >
-                  <p className="px-5 pb-5 text-[14.5px] leading-relaxed text-(--muted)">
+                  <p className="serif-answer px-5 pb-5 text-(--muted)">
                     {item.a}
                   </p>
                 </motion.div>

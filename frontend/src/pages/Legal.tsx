@@ -5,8 +5,8 @@ export function Privacy() {
     <main className="mx-auto w-[min(760px,92%)] py-14 md:py-20">
       <Reveal>
         <p className="eyebrow">Privacy Policy</p>
-        <h1 className="mt-3 text-3xl font-extrabold tracking-tight">Your data stays yours</h1>
-        <div className="prose-custom mt-6 flex flex-col gap-4 text-[15px] leading-relaxed text-(--muted)">
+        <h1 className="h2-serif mt-3 text-3xl md:text-4xl">Your data stays yours</h1>
+        <div className="serif-body mt-6 flex flex-col gap-4 text-(--muted)">
           <p>
             CodeMentor AI stores your account (email and display name), your debugging
             sessions and messages, and derived progress data such as misconceptions,
@@ -34,8 +34,8 @@ export function Terms() {
     <main className="mx-auto w-[min(760px,92%)] py-14 md:py-20">
       <Reveal>
         <p className="eyebrow">Terms of Service</p>
-        <h1 className="mt-3 text-3xl font-extrabold tracking-tight">Fair use, honestly</h1>
-        <div className="prose-custom mt-6 flex flex-col gap-4 text-[15px] leading-relaxed text-(--muted)">
+        <h1 className="h2-serif mt-3 text-3xl md:text-4xl">Fair use, honestly</h1>
+        <div className="serif-body mt-6 flex flex-col gap-4 text-(--muted)">
           <p>
             CodeMentor AI is a learning tool. Guest mode includes one free debugging
             session; accounts include unlimited sessions subject to fair-use rate
