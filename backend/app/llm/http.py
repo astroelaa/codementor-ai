@@ -22,6 +22,21 @@ def _kind_for_status(status: int) -> str:
     return "server"
 
 
+# A plain browser-like User-Agent: some provider edges challenge or block
+# non-browser clients (e.g. Cloudflare bot rules) before authentication.
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/126.0.0.0 Safari/537.36"
+)
+
+
+def _with_user_agent(headers: dict) -> dict:
+    merged = {"User-Agent": BROWSER_USER_AGENT}
+    merged.update(headers or {})
+    return merged
+
+
 def post_json(
     provider: str,
     url: str,
@@ -33,7 +48,7 @@ def post_json(
 ) -> dict:
     try:
         with httpx.Client(timeout=timeout) as client:
-            resp = client.post(url, headers=headers, json=payload)
+            resp = client.post(url, headers=_with_user_agent(headers), json=payload)
     except httpx.TimeoutException as exc:
         raise LLMError(provider, "timeout", f"request timed out ({exc!r})")
     except httpx.HTTPError as exc:
@@ -75,7 +90,9 @@ def open_sse_stream(
     """Yield an open SSE response, mapping connection and status errors."""
     try:
         with httpx.Client(timeout=timeout) as client:
-            with client.stream("POST", url, headers=headers, json=payload) as resp:
+            with client.stream(
+                "POST", url, headers=_with_user_agent(headers), json=payload
+            ) as resp:
                 if resp.status_code >= 400:
                     body = resp.read().decode("utf-8", "replace")[:300]
                     raise LLMError(

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 700
 
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-20b"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"
     openai_api_key: str = ""

@@ -16,7 +16,7 @@ from .anthropic import AnthropicProvider
 from .base import BaseLLMProvider, ChatMessage
 from .errors import LLMError
 from .gemini import GeminiProvider
-from .groq import GroqProvider
+from .groq_sdk import GroqSDKProvider
 from .openai_provider import OpenAIProvider
 
 SUPPORTED = ("groq", "gemini", "openai", "anthropic")
@@ -26,7 +26,7 @@ def build_provider(
     name: str, api_key: str, model: str, *, timeout: int, max_tokens: int
 ) -> BaseLLMProvider:
     if name == "groq":
-        return GroqProvider(api_key, model, timeout=timeout, max_tokens=max_tokens)
+        return GroqSDKProvider(api_key, model, timeout=timeout, max_tokens=max_tokens)
     if name == "gemini":
         return GeminiProvider(api_key, model, timeout=timeout, max_tokens=max_tokens)
     if name == "openai":
