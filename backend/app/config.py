@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     # Comma-separated browser origins allowed to call this API.
     allowed_origins: str = (
         "http://localhost:5173,http://127.0.0.1:5173,"
-        "http://localhost:4173,http://127.0.0.1:4173"
+        "http://localhost:4173,http://127.0.0.1:4173,"
+        "http://localhost:5500,http://127.0.0.1:5500,"
+        "http://localhost:8080,http://127.0.0.1:8080"
     )
 
     # --- LLM layer ------------------------------------------------------
