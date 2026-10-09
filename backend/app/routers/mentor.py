@@ -36,6 +36,7 @@ from app.schemas import (
     SessionCreate,
     SessionDetailResponse,
 )
+from app.services.detect import detect_language
 from app.services.mentor import build_history, extract_json_dict, parse_feedback
 from app.services.progress import (
     award_badge,
@@ -228,6 +229,17 @@ def create_session(
     user: User | None = Depends(deps.get_optional_user),
 ):
     ensure_reference_data(db)
+    language = payload.language
+    if language == "auto":
+        language = detect_language(payload.code)
+        if language == "unknown":
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Could not detect the language. "
+                    "Select a language explicitly."
+                ),
+            )
     guest_token: str | None = None
     if user is None:
         guest_token = guest_token_from(request) or new_guest_token()
@@ -248,7 +260,7 @@ def create_session(
         id=str(uuid.uuid4()),
         user_id=user.id if user else None,
         guest_token=guest_token,
-        language=payload.language,
+        language=language,
         code=payload.code.strip(),
         status="active",
     )
@@ -341,6 +353,7 @@ def post_message(
     history = build_history(session.messages, settings.history_window)
     system = chat_system_prompt(
         language=session.language,
+        code=session.code,
         hints_left=_hints_left(settings, session),
     )
     response, _ = _mentor_reply(
@@ -385,6 +398,7 @@ def post_message_stream(
     history = build_history(session.messages, settings.history_window)
     system = stream_system_prompt(
         language=session.language,
+        code=session.code,
         hints_left=_hints_left(settings, session),
     )
 
@@ -493,6 +507,7 @@ def request_hint(
     history = build_history(session.messages, settings.history_window)
     system = hint_system_prompt(
         language=session.language,
+        code=session.code,
         hints_left=_hints_left(settings, session) - 1,
     )
     response, _ = _mentor_reply(

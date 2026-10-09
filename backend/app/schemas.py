@@ -43,11 +43,24 @@ class UpdateProfileRequest(BaseModel):
 
 
 # --- Mentor ---------------------------------------------------------------
-Language = Literal["python", "javascript"]
+Language = Literal[
+    "python", "javascript", "typescript", "java", "cpp", "csharp", "go", "sql"
+]
 
 
 class SessionCreate(BaseModel):
-    language: Language = "python"
+    # "auto" detects the language server-side; explicit values always win.
+    language: Literal[
+        "python",
+        "javascript",
+        "typescript",
+        "java",
+        "cpp",
+        "csharp",
+        "go",
+        "sql",
+        "auto",
+    ] = "auto"
     code: str = Field(min_length=1, max_length=8000)
 
 

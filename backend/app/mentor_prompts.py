@@ -24,10 +24,16 @@ _SHARED_RULES = """\
 You are CodeMentor AI, a Socratic programming mentor helping a student debug
 {language} code. Your only job is to teach the student HOW TO THINK.
 
+The student's current code and language are supplied below. They are always
+complete and current — NEVER ask the student to paste code, describe the
+code, or tell you the language. Work only with what is provided.
+
 HARD RULES (never break these):
-1. Diagnose the bug internally, but NEVER show fixed, corrected, rewritten or
-   partial code. Never use code fences. Never give line-by-line corrections.
-2. Ask exactly ONE question per reply. Short, sharp, guiding questions only.
+1. Diagnose the bug internally, then name exactly ONE suspicious area of the
+   code (a line, an expression, one behavior) and ask exactly ONE guiding
+   question about it. One area, one question, nothing else.
+2. NEVER show fixed, corrected, rewritten or partial code. Never use code
+   fences. Never give line-by-line corrections.
 3. First acknowledge what is sound in the student's reasoning in one short
    sentence, then expose the gap with your question.
 4. Give a concrete hint ONLY when the student explicitly asks for one.
@@ -41,7 +47,7 @@ HARD RULES (never break these):
    question for a new situation.
 7. Never answer your own question. Never dump the whole explanation at once.
 
-STYLE: warm, concise, curious. Maximum 90 words. Plain text only.\
+STYLE: warm, concise, curious. Maximum 80 words. Plain text only.\
 """
 
 STUDENT_CODE_BLOCK = """\
@@ -52,11 +58,13 @@ The student's current code:
 """
 
 
-def chat_system_prompt(*, language: str, hints_left: int) -> str:
+def chat_system_prompt(*, language: str, code: str, hints_left: int) -> str:
     return (
         _SHARED_RULES.format(
             language=language, hints_left=hints_left, types=_TYPE_LIST
         )
+        + "\n\n"
+        + STUDENT_CODE_BLOCK.format(code=code)
         + "\n\nOUTPUT FORMAT (strict): reply with ONLY one valid JSON object, "
         + "no prose before or after it:\n"
         + '{\n  "reply": "your message ending with one question",\n'
@@ -70,11 +78,13 @@ def chat_system_prompt(*, language: str, hints_left: int) -> str:
     )
 
 
-def stream_system_prompt(*, language: str, hints_left: int) -> str:
+def stream_system_prompt(*, language: str, code: str, hints_left: int) -> str:
     return (
         _SHARED_RULES.format(
             language=language, hints_left=hints_left, types=_TYPE_LIST
         )
+        + "\n\n"
+        + STUDENT_CODE_BLOCK.format(code=code)
         + "\n\nOUTPUT FORMAT (strict): plain text only. No JSON, no markdown "
         + "headers, no code blocks. End with exactly one question."
     )
@@ -96,13 +106,15 @@ def meta_system_prompt() -> str:
     )
 
 
-def hint_system_prompt(*, language: str, hints_left: int) -> str:
+def hint_system_prompt(*, language: str, code: str, hints_left: int) -> str:
     return (
         "You are CodeMentor AI, a Socratic programming mentor. The student "
         f"is debugging {language} code and explicitly asked for a hint "
         f"(hints remaining after this one: {hints_left}).\n\n"
-        "RULES: give exactly ONE small hint that narrows the search without "
+        + STUDENT_CODE_BLOCK.format(code=code)
+        + "\nRULES: give exactly ONE small hint that narrows the search without "
         "revealing the fix. Never show fixed, corrected or partial code. "
+        "Never ask for code that is already provided above. "
         "End with one guiding question. Maximum 70 words, plain text.\n\n"
         "OUTPUT FORMAT (strict): reply with ONLY one valid JSON object:\n"
         + '{\n  "reply": "the hint plus one question",\n'

@@ -24,6 +24,7 @@ import { CodeEditor } from "../components/CodeEditor";
 import { EmptyState } from "../components/bits";
 import { TypingDots } from "../components/bits";
 import { Reveal } from "../components/Reveal";
+import { LANGUAGES, guessLanguage } from "../lib/detect";
 import {
   ApiError,
   api,
@@ -63,7 +64,7 @@ export function Workspace() {
   const { user } = useAuth();
   const toast = useToast();
 
-  const [language, setLanguage] = useState("python");
+  const [langSel, setLangSel] = useState<string>("auto");
   const [code, setCode] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [status, setStatus] = useState<"active" | "solved" | null>(null);
@@ -90,15 +91,34 @@ export function Workspace() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const snippetFor = useMemo(
-    () => (snippets ?? []).find((s) => s.language === language),
-    [snippets, language],
+  const snippetByLang = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of snippets ?? []) map.set(s.language, s.code);
+    return map;
+  }, [snippets]);
+
+  // Effective language for highlighting: manual choice wins, otherwise a
+  // client-side guess (the backend re-detects authoritatively on create).
+  const effectiveLanguage = useMemo(
+    () =>
+      langSel === "auto" ? (guessLanguage(code) ?? "python") : langSel,
+    [langSel, code],
   );
 
   useEffect(() => {
-    if (!code && snippetFor) setCode(snippetFor.code);
+    if (!code) {
+      const py = snippetByLang.get("python");
+      if (py) setCode(py);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snippetFor]);
+  }, [snippetByLang]);
+
+  function loadExample(lang: string) {
+    const sample = snippetByLang.get(lang);
+    if (!sample) return;
+    setLangSel(lang);
+    setCode(sample);
+  }
 
   useEffect(() => {
     const el = logRef.current;
@@ -175,8 +195,10 @@ export function Workspace() {
     setStarting(true);
     setGuestCapped(false);
     try {
-      const s = await api.createSession(language, code);
+      const s = await api.createSession(langSel, code);
       if (s.guest_token) tokenStore.guest = s.guest_token;
+      // Sync the selector to the server-stored language (authoritative).
+      setLangSel(s.language);
       setSessionId(s.id);
       setStatus("active");
       setMessages([]);
@@ -338,42 +360,48 @@ export function Workspace() {
           {/* ---------- editor ---------- */}
           <Reveal className="min-w-0">
             <div className="card overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-(--border) px-4 py-2.5">
-                <div className="flex gap-1" role="tablist" aria-label="Language">
-                  {(["python", "javascript"] as const).map((l) => (
-                    <button
-                      key={l}
-                      role="tab"
-                      aria-selected={language === l}
-                      type="button"
-                      disabled={inSession}
-                      onClick={() => {
-                        setLanguage(l);
-                        const s = (snippets ?? []).find((x) => x.language === l);
-                        if (s) setCode(s.code);
-                      }}
-                      className={`rounded-lg px-3 py-1.5 font-mono text-xs font-semibold transition-colors ${
-                        language === l
-                          ? "bg-(--accent-soft) text-(--accent-text)"
-                          : "text-(--muted) hover:text-(--text)"
-                      } disabled:opacity-60`}
-                    >
-                      {l === "python" ? "average.py" : "average.js"}
-                    </button>
+              <div className="flex flex-wrap items-center gap-2 border-b border-(--border) px-4 py-2.5">
+                <label htmlFor="ws-lang" className="sr-only">Programming language</label>
+                <select
+                  id="ws-lang"
+                  value={langSel}
+                  disabled={inSession}
+                  onChange={(e) => setLangSel(e.target.value)}
+                  className="rounded-lg border border-(--border) bg-(--surface-2) px-2.5 py-1.5 font-mono text-xs font-semibold text-(--text) outline-none transition-colors focus:border-(--accent) disabled:opacity-60"
+                >
+                  <option value="auto">
+                    Auto{langSel === "auto" ? ` (${effectiveLanguage})` : ""}
+                  </option>
+                  {LANGUAGES.map((l) => (
+                    <option key={l.value} value={l.value}>
+                      {l.label}
+                    </option>
                   ))}
-                </div>
-                {snippetFor && !inSession && (
-                  <button
-                    type="button"
-                    onClick={() => setCode(snippetFor.code)}
-                    className="ml-auto text-xs font-semibold text-(--muted) transition-colors hover:text-(--text)"
-                  >
-                    Load sample: {snippetFor.title}
-                  </button>
+                </select>
+                {!inSession && (
+                  <>
+                    <label htmlFor="ws-example" className="sr-only">Load example snippet</label>
+                    <select
+                      id="ws-example"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) loadExample(e.target.value);
+                        e.target.value = "";
+                      }}
+                      className="rounded-lg border border-(--border) bg-transparent px-2.5 py-1.5 text-xs font-semibold text-(--muted) outline-none transition-colors hover:text-(--text) focus:border-(--accent)"
+                    >
+                      <option value="">Load example…</option>
+                      {(snippets ?? []).map((s) => (
+                        <option key={s.language} value={s.language}>
+                          {s.title} ({s.language})
+                        </option>
+                      ))}
+                    </select>
+                  </>
                 )}
               </div>
               <CodeEditor
-                language={language}
+                language={effectiveLanguage}
                 value={code}
                 onChange={inSession ? () => {} : setCode}
                 label="Your code"

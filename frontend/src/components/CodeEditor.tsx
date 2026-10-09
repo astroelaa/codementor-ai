@@ -1,9 +1,35 @@
 import { Suspense, lazy, useMemo } from "react";
+import { cpp } from "@codemirror/lang-cpp";
+import { go } from "@codemirror/lang-go";
+import { java } from "@codemirror/lang-java";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
+import { sql } from "@codemirror/lang-sql";
 import { useTheme } from "../lib/theme";
 
 const CodeMirror = lazy(() => import("@uiw/react-codemirror"));
+
+function extensionFor(language: string) {
+  switch (language) {
+    case "javascript":
+      return javascript();
+    case "typescript":
+      return javascript({ typescript: true });
+    case "java":
+      return java();
+    case "cpp":
+      return cpp();
+    case "go":
+      return go();
+    case "sql":
+      return sql();
+    case "csharp":
+      return java(); // no official C# grammar; Java is the closest highlight
+    case "python":
+    default:
+      return python();
+  }
+}
 
 export function CodeEditor({
   language,
@@ -17,10 +43,7 @@ export function CodeEditor({
   label: string;
 }) {
   const { theme } = useTheme();
-  const extensions = useMemo(
-    () => [language === "javascript" ? javascript() : python()],
-    [language],
-  );
+  const extensions = useMemo(() => [extensionFor(language)], [language]);
   return (
     <Suspense
       fallback={
