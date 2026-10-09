@@ -367,7 +367,7 @@ export function Workspace() {
                   value={langSel}
                   disabled={inSession}
                   onChange={(e) => setLangSel(e.target.value)}
-                  className="rounded-lg border border-(--border) bg-(--surface-2) px-2.5 py-1.5 font-mono text-xs font-semibold text-(--text) outline-none transition-colors focus:border-(--accent) disabled:opacity-60"
+                  className="rounded-lg border border-(--border) bg-(--surface-2) px-2.5 py-1.5 font-mono text-xs font-semibold text-(--text) outline-none transition-colors focus:border-(--accent) disabled:opacity-60 [&>option]:bg-(--surface-2) [&>option]:text-(--text)"
                 >
                   <option value="auto">
                     Auto{langSel === "auto" ? ` (${effectiveLanguage})` : ""}
@@ -388,7 +388,7 @@ export function Workspace() {
                         if (e.target.value) loadExample(e.target.value);
                         e.target.value = "";
                       }}
-                      className="rounded-lg border border-(--border) bg-transparent px-2.5 py-1.5 text-xs font-semibold text-(--muted) outline-none transition-colors hover:text-(--text) focus:border-(--accent)"
+                      className="rounded-lg border border-(--border) bg-(--surface-2) px-2.5 py-1.5 text-xs font-semibold text-(--text) outline-none transition-colors hover:border-(--border-strong) focus:border-(--accent) [&>option]:bg-(--surface-2) [&>option]:text-(--text)"
                     >
                       <option value="">Load example…</option>
                       {(snippets ?? []).map((s) => (
