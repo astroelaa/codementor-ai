@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CodeMentor AI — Learn to understand code, not just write it</title>
+  <meta name="description" content="Copilot writes code. CodeMentor AI teaches you how to understand code. A Socratic AI mentor that guides you to the fix instead of giving it to you." />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+</head>
+<body>
+
+  <!-- ================= NAVBAR ================= -->
+  <header class="navbar" id="navbar">
+    <div class="container nav-inner">
+      <a href="#top" class="brand">
+        <span class="brand-mark">⌘</span>
+        <span>CodeMentor <b>AI</b></span>
+      </a>
+
+      <nav class="nav-links" id="navLinks">
+        <a href="#demo">Live demo</a>
+        <a href="#compare">Why</a>
+        <a href="#flow">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#dashboard">Dashboard</a>
+        <a href="#architecture">Architecture</a>
+      </nav>
+
+      <div class="nav-actions">
+        <button class="icon-btn" id="themeToggle" title="Toggle light / dark mode" aria-label="Toggle theme">☀️</button>
+        <a href="#demo" class="btn btn-primary btn-sm">Try it</a>
+        <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= HERO ================= -->
+  <section class="hero" id="top">
+    <div class="hero-glow"></div>
+    <div class="container hero-inner">
+      <div class="hero-badge reveal">🧭 Socratic debugging for real learners</div>
+      <h1 class="reveal">
+        Copilot writes code.<br />
+        <span class="gradient-text">CodeMentor AI teaches you how to understand code.</span>
+      </h1>
+      <p class="hero-sub reveal">
+        Paste a broken function. Instead of handing you the answer, your mentor asks
+        <b>one guiding question at a time</b>, watches your reasoning, spends a budget of
+        only 3 hints — and makes <b>you</b> explain the fix.
+      </p>
+      <div class="hero-cta reveal">
+        <a href="#demo" class="btn btn-primary btn-lg">Try the live demo →</a>
+        <a href="#flow" class="btn btn-ghost btn-lg">See how it works</a>
+      </div>
+      <div class="hero-stats reveal">
+        <div><strong>1</strong><span>question at a time</span></div>
+        <div><strong>3</strong><span>hints per session</span></div>
+        <div><strong>0</strong><span>answers handed to you</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= WORKING DEMO ================= -->
+  <section class="section" id="demo">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Working demo</span>
+        <h2>Debug with a mentor, not a machine that does it for you</h2>
+        <p>A real buggy <code>average()</code> function. A real mentor. Hit <b>Diagnose</b> and start reasoning.</p>
+      </div>
+
+      <div class="demo-grid">
+        <!-- ---- Editor ---- -->
+        <div class="panel editor-panel reveal">
+          <div class="panel-head">
+            <span class="dots"><i></i><i></i><i></i></span>
+            <span class="panel-title">average.py</span>
+            <span class="badge badge-warn" id="bugBadge">● buggy</span>
+          </div>
+          <div class="editor-wrap">
+            <div class="gutter" id="gutter">1</div>
+            <textarea id="codeEditor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">def average(numbers):
+    """Return the average of a list of numbers."""
+    total = 0
+    for n in numbers:
+        total += n
+    return total / len(numbers)
+
+
+print(average([2, 4, 6]))
+print(average([]))</textarea>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-primary" id="diagnoseBtn">🩺 Diagnose</button>
+            <button class="btn btn-ghost" id="resetBtn">Reset</button>
+            <span class="editor-hint">No answer is ever shown — only questions.</span>
+          </div>
+        </div>
+
+        <!-- ---- Chat ---- -->
+        <div class="panel chat-panel reveal">
+          <div class="panel-head">
+            <span class="status-dot" id="statusDot"></span>
+            <span class="panel-title">Mentor session</span>
+            <span class="badge" id="modeBadge">ready</span>
+          </div>
+
+          <div class="chat-log" id="chatLog" aria-live="polite">
+            <div class="msg mentor">
+              <div class="avatar">M</div>
+              <div class="bubble">
+                Hi! I'm your mentor. Press <b>Diagnose</b> and I'll start by asking you
+                one question at a time. I won't fix the code for you.
+              </div>
+            </div>
+          </div>
+
+          <div class="typing" id="typing" hidden>
+            <span></span><span></span><span></span>
+          </div>
+
+          <div class="chat-composer">
+            <input type="text" id="chatInput" placeholder="Type your reasoning…" disabled />
+            <button class="btn btn-primary" id="sendBtn" disabled>Send</button>
+            <button class="btn btn-ghost" id="hintBtn" disabled>💡 Hint</button>
+          </div>
+        </div>
+
+        <!-- ---- Side panel ---- -->
+        <aside class="panel side-panel reveal">
+          <div class="side-block">
+            <div class="side-label">Hint budget</div>
+            <div class="hints" id="hintPips">
+              <span class="pip">💡</span><span class="pip">💡</span><span class="pip">💡</span>
+            </div>
+            <div class="side-note" id="hintNote">3 hints left — only if you ask</div>
+          </div>
+
+          <div class="side-block">
+            <div class="side-label">Understanding</div>
+            <div class="meter"><div class="meter-fill" id="meterFill" style="width:10%"></div></div>
+            <div class="side-note"><span id="meterValue">10</span>/100 — grows when your reasoning is sound</div>
+          </div>
+
+          <div class="side-block" id="pathBlock" hidden>
+            <div class="side-label">Recommended learning path</div>
+            <ul class="path-list" id="pathList"></ul>
+          </div>
+
+          <div class="side-block">
+            <div class="side-label">Ground rules</div>
+            <ul class="rules">
+              <li>One question at a time</li>
+              <li>No code fixes from me</li>
+              <li>Max 3 hints, on request</li>
+              <li>You explain the fix last</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+
+      <div class="demo-error" id="demoError" hidden>
+        <div>
+          <b>Could not reach the mentor.</b>
+          <span id="demoErrorMsg"></span>
+        </div>
+        <div class="demo-error-actions">
+          <button class="btn btn-ghost btn-sm" id="retryBtn">Retry</button>
+          <button class="btn btn-primary btn-sm" id="offlineBtn">Continue offline</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COMPARISON ================= -->
+  <section class="section alt" id="compare">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Copilot vs CodeMentor</span>
+        <h2>Fast answers make weak developers</h2>
+        <p>Both tools are useful. Only one of them makes you better next time.</p>
+      </div>
+
+      <div class="compare-grid">
+        <article class="panel compare-card reveal muted">
+          <div class="compare-head"><span class="compare-ico">⚡</span> Autocomplete assistants</div>
+          <ul class="compare-list">
+            <li><span class="x">✕</span> Paste the fix, ship, forget</li>
+            <li><span class="x">✕</span> You still don't know why it broke</li>
+            <li><span class="x">✕</span> Next bug, same panic</li>
+            <li><span class="x">✕</span> Hidden wrong assumptions slip through</li>
+            <li><span class="x">✕</span> Zero retention after the tab closes</li>
+          </ul>
+        </article>
+
+        <article class="panel compare-card reveal highlight">
+          <div class="compare-head"><span class="compare-ico">🧭</span> CodeMentor AI</div>
+          <ul class="compare-list">
+            <li><span class="ok">✓</span> One guiding question at a time</li>
+            <li><span class="ok">✓</span> You find the bug yourself</li>
+            <li><span class="ok">✓</span> Misconceptions named and challenged</li>
+            <li><span class="ok">✓</span> You explain the fix in your own words</li>
+            <li><span class="ok">✓</span> A learning path that sticks</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CORE IDEA ================= -->
+  <section class="section" id="idea">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">The core idea</span>
+        <h2>Being handed an answer is not the same as understanding</h2>
+      </div>
+      <div class="idea-grid">
+        <div class="panel idea-card reveal">
+          <span class="idea-num">01</span>
+          <h3>Diagnose internally, never out loud</h3>
+          <p>The mentor quietly works out what's broken. It will never show you fixed code, rewritten code, or a line-by-line correction.</p>
+        </div>
+        <div class="panel idea-card reveal">
+          <span class="idea-num">02</span>
+          <h3>One question at a time</h3>
+          <p>Small, sharp questions force you to actually read your own code — the place where real debugging skill is built.</p>
+        </div>
+        <div class="panel idea-card reveal">
+          <span class="idea-num">03</span>
+          <h3>Reasoning is graded, not results</h3>
+          <p>Your understanding meter moves when your <i>explanation</i> is sound, not when the code happens to run.</p>
+        </div>
+        <div class="panel idea-card reveal">
+          <span class="idea-num">04</span>
+          <h3>Explain it back or it didn't happen</h3>
+          <p>The session only closes when you describe the fix in your own words — the classic test of real comprehension.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 7 STEP FLOW ================= -->
+  <section class="section alt" id="flow">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">User flow</span>
+        <h2>From "it's broken" to "I know exactly why"</h2>
+        <p>Seven steps, every single session.</p>
+      </div>
+
+      <ol class="timeline">
+        <li class="timeline-item reveal"><span class="t-num">1</span><div><h4>Paste the code</h4><p>Drop in the function that's misbehaving.</p></div></li>
+        <li class="timeline-item reveal"><span class="t-num">2</span><div><h4>Diagnose</h4><p>The mentor reads it and prepares its first question.</p></div></li>
+        <li class="timeline-item reveal"><span class="t-num">3</span><div><h4>Reason out loud</h4><p>You answer one question at a time.</p></div></li>
+        <li class="timeline-item reveal"><span class="t-num">4</span><div><h4>Get challenged</h4><p>Weak assumptions get named as misconceptions.</p></div></li>
+        <li class="timeline-item reveal"><span class="t-num">5</span><div><h4>Spend a hint</h4><p>Stuck? Ask. You only have three, so spend them wisely.</p></div></li>
+        <li class="timeline-item reveal"><span class="t-num">6</span><div><h4>Explain your fix</h4><p>Describe the change and why it works, in your words.</p></div></li>
+        <li class="timeline-item reveal"><span class="t-num">7</span><div><h4>Follow the path</h4><p>Get a personalised list of concepts to study next.</p></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ================= FEATURES ================= -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Key features</span>
+        <h2>Five teaching mechanics, not five chat wrappers</h2>
+      </div>
+
+      <div class="feature-grid">
+        <article class="panel feature-card reveal">
+          <div class="feature-ico">🪞</div>
+          <h3>Socratic Debugging</h3>
+          <p>The mentor diagnoses the bug privately, then leads you to it with a sequence of questions. The answer is always yours.</p>
+        </article>
+        <article class="panel feature-card reveal">
+          <div class="feature-ico">💡</div>
+          <h3>Hint Budget</h3>
+          <p>Three hints per session, only on request. Scarcity makes you think first — the way real debugging actually feels.</p>
+        </article>
+        <article class="panel feature-card reveal">
+          <div class="feature-ico">🎭</div>
+          <h3>Misconception Detection</h3>
+          <p>"len() counts the values, not the indexes" — wrong beliefs are named the moment you express them.</p>
+        </article>
+        <article class="panel feature-card reveal">
+          <div class="feature-ico">🗣️</div>
+          <h3>Explanation Check</h3>
+          <p>Before you move on, you must explain the fix in your own words. No explanation, no closure.</p>
+        </article>
+        <article class="panel feature-card reveal">
+          <div class="feature-ico">📚</div>
+          <h3>Documentation Simplifier</h3>
+          <p>Sticky concept? The mentor re-explains official docs in plain language — then asks a question to check it landed.</p>
+        </article>
+        <article class="panel feature-card reveal feature-cta">
+          <div class="feature-ico">🚀</div>
+          <h3>Ready to try it?</h3>
+          <p>The full demo is live at the top of this page.</p>
+          <a href="#demo" class="btn btn-primary">Open the demo</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section class="section alt" id="dashboard">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Learning dashboard</span>
+        <h2>Proof that you're getting better</h2>
+        <p>A preview of the progress view that sits behind each session.</p>
+      </div>
+
+      <div class="panel dash reveal">
+        <div class="dash-top">
+          <div class="dash-user">
+            <span class="dash-avatar">JS</span>
+            <div><b>Jamie Student</b><small>Week 3 · Python fundamentals</small></div>
+          </div>
+          <div class="dash-streak">🔥 7-day streak</div>
+        </div>
+
+        <div class="dash-stats">
+          <div class="stat"><b>42</b><span>Sessions</span></div>
+          <div class="stat"><b>118</b><span>Questions answered</span></div>
+          <div class="stat"><b>63</b><span>Hints refused 😄</span></div>
+          <div class="stat"><b>87%</b><span>Avg. understanding</span></div>
+        </div>
+
+        <div class="dash-body">
+          <div class="dash-col">
+            <div class="side-label">Understanding over time</div>
+            <div class="bars">
+              <div class="bar" style="--h:28%"><span>Mon</span></div>
+              <div class="bar" style="--h:41%"><span>Tue</span></div>
+              <div class="bar" style="--h:36%"><span>Wed</span></div>
+              <div class="bar" style="--h:58%"><span>Thu</span></div>
+              <div class="bar" style="--h:66%"><span>Fri</span></div>
+              <div class="bar" style="--h:74%"><span>Sat</span></div>
+              <div class="bar" style="--h:87%"><span>Sun</span></div>
+            </div>
+          </div>
+
+          <div class="dash-col">
+            <div class="side-label">Top weak spots</div>
+            <ul class="weak-list">
+              <li><span>Edge cases: empty input</span><i style="--w:82%"></i></li>
+              <li><span>Off-by-one in loops</span><i style="--w:64%"></i></li>
+              <li><span>Mutating while iterating</span><i style="--w:47%"></i></li>
+              <li><span>Float precision</span><i style="--w:31%"></i></li>
+            </ul>
+          </div>
+
+          <div class="dash-col">
+            <div class="side-label">Current learning path</div>
+            <ul class="path-list">
+              <li>✅ Reading a traceback</li>
+              <li>✅ Guard clauses</li>
+              <li>🔄 Edge cases: empty input</li>
+              <li>⏳ Writing your own test cases</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ARCHITECTURE ================= -->
+  <section class="section" id="architecture">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="eyebrow">Architecture &amp; tech stack</span>
+        <h2>Deliberately boring, deliberately small</h2>
+        <p>No build step, no database, no lock-in. Two folders you can read in an afternoon.</p>
+      </div>
+
+      <div class="diagram reveal">
+        <div class="node">
+          <span class="node-tag">Frontend</span>
+          <b>GitHub Pages</b>
+          <small>HTML · CSS · vanilla JS</small>
+        </div>
+        <div class="arrow"><span>POST /api/mentor</span></div>
+        <div class="node">
+          <span class="node-tag">Backend</span>
+          <b>Render (free)</b>
+          <small>FastAPI · Pydantic · CORS</small>
+        </div>
+        <div class="arrow"><span>HTTPS + GROQ_API_KEY</span></div>
+        <div class="node">
+          <span class="node-tag">Model</span>
+          <b>Groq API</b>
+          <small>Llama 3.3 70B (free tier)</small>
+        </div>
+      </div>
+
+      <div class="stack-grid">
+        <div class="panel stack-card reveal">
+          <h4>Frontend</h4>
+          <ul>
+            <li>Plain HTML / CSS / JS — no framework, no build</li>
+            <li>Single config variable for the backend URL</li>
+            <li>Scripted offline fallback if the API is down</li>
+            <li>Dark / light theme, mobile-first layout</li>
+          </ul>
+        </div>
+        <div class="panel stack-card reveal">
+          <h4>Backend</h4>
+          <ul>
+            <li>FastAPI + Pydantic request/response validation</li>
+            <li><code>GROQ_API_KEY</code> read from environment only</li>
+            <li><code>GET /health</code> · <code>POST /api/mentor</code></li>
+            <li>CORS locked to GitHub Pages + local dev</li>
+          </ul>
+        </div>
+        <div class="panel stack-card reveal">
+          <h4>Safety &amp; limits</h4>
+          <ul>
+            <li>Key never committed, never logged, never echoed</li>
+            <li>3-hint budget enforced server-side</li>
+            <li>Timeouts + graceful 502/503 errors</li>
+            <li>Model falls back if the primary is rate-limited</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <span class="brand-mark">⌘</span>
+        <div>
+          <b>CodeMentor AI</b>
+          <p>Copilot writes code. CodeMentor AI teaches you how to understand code.</p>
+        </div>
+      </div>
+      <nav class="footer-links">
+        <a href="#demo">Live demo</a>
+        <a href="#compare">Why it exists</a>
+        <a href="#flow">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#architecture">Architecture</a>
+      </nav>
+      <div class="footer-meta">
+        <span>Built with FastAPI + vanilla JS</span>
+        <span>© <span id="year"></span> CodeMentor AI</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/script.js"></script>
+</body>
+</html>

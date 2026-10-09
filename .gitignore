@@ -1,0 +1,36 @@
+# ---- Secrets: NEVER commit these ----
+.env
+.env.local
+*.env
+!*.env.example
+!backend/.env.example
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+*.db
+*.sqlite*
+codementor.db
+
+# ---- Node / frontend build ----
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+frontend/dist/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Logs ----
+*.log
