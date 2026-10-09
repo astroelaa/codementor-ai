@@ -85,10 +85,15 @@ export function Workspace() {
   const [guestCapped, setGuestCapped] = useState(false);
 
   const logRef = useRef<HTMLDivElement>(null);
-  const { data: snippets } = useQuery({
+  const {
+    data: snippets,
+    isError: serverUnreachable,
+    refetch: retryServer,
+  } = useQuery({
     queryKey: ["snippets"],
     queryFn: api.snippets,
     staleTime: 5 * 60 * 1000,
+    retry: 1,
   });
 
   const snippetByLang = useMemo(() => {
@@ -357,6 +362,22 @@ export function Workspace() {
 
       {!guestCapped && (
         <div className="mt-6 grid items-start gap-5 lg:grid-cols-[1.1fr_1fr] xl:grid-cols-[1fr_1fr_280px]">
+          {serverUnreachable && (
+            <div className="card flex flex-wrap items-center gap-3 border-(--warning) px-5 py-3.5 text-sm lg:col-span-2 xl:col-span-3" role="status">
+              <Loader2 size={16} strokeWidth={1.5} className="animate-spin text-(--warning)" />
+              <span className="text-(--muted)">
+                The mentor server is unreachable — free hosting puts it to sleep
+                when idle, and waking takes about a minute.
+              </span>
+              <button
+                type="button"
+                onClick={() => void retryServer()}
+                className="btn btn-ghost btn-sm ml-auto"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {/* ---------- editor ---------- */}
           <Reveal className="min-w-0">
             <div className="card overflow-hidden">

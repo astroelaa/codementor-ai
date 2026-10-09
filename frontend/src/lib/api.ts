@@ -1,6 +1,7 @@
 /* Typed client for the CodeMentor AI backend. */
 
 export const API_BASE =
+  (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/$/, "") ||
   (import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "") ||
   "http://127.0.0.1:8000";
 

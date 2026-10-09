@@ -2,11 +2,11 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// base './' + HashRouter: the static build works under any subpath,
-// including a GitHub Pages project URL, with no rebuild per host.
+// base '/codementor-ai/' + HashRouter: built assets resolve under the
+// GitHub Pages project URL https://astroelaa.github.io/codementor-ai/.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: "./",
+  base: "/codementor-ai/",
   server: { port: 5173, host: "127.0.0.1" },
   preview: { port: 4173, host: "127.0.0.1" },
   build: {
