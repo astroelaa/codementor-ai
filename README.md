@@ -120,7 +120,7 @@ Guests get exactly one free session per device token, then must sign up.
 
 - **Phase 1** (done): backend foundation — models, migrations, auth, LLM
   abstraction with fallback, mentor endpoints, tests.
-- **Phase 2**: React frontend — design system, landing page, auth screens,
+- **Phase 2** (done): React frontend — design system, landing page, auth screens,
   mentor workspace with streaming.
 - **Phase 3**: dashboard, learning paths, doc simplifier, history, badges.
 - **Phase 4**: animation and accessibility polish, final README.

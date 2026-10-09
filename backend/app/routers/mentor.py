@@ -416,6 +416,9 @@ def post_message_stream(
                 temperature=0.0,
             )
             feedback = parse_feedback(meta_raw)
+            # The meta call only scores the turn; the visible reply is the
+            # streamed text, never the meta placeholder.
+            feedback.reply = reply
         except LLMError:
             feedback = MentorFeedback(
                 reply=reply,

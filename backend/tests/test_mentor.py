@@ -58,6 +58,11 @@ def test_streaming_turn_emits_tokens_then_done(user_headers, fake_llm):
     assert done["understanding_score"] == 25
     assert done["message_id"]
     assert done["misconception"]["type"] == "empty-input"
+    # The stored reply must be the streamed text, not the meta placeholder.
+    assert done["reply"] == "What happens here?"
+    r = client.get(f"/api/sessions/{session_id}", headers=user_headers)
+    stored = [m for m in r.json()["messages"] if m["role"] == "assistant"]
+    assert stored and stored[-1]["content"] == "What happens here?"
 
 
 def test_hint_budget_enforced_server_side(user_headers, fake_llm):
