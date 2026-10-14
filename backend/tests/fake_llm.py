@@ -45,6 +45,14 @@ JUDGE_FAIL_JSON = json.dumps(
     }
 )
 
+DOC_JSON = json.dumps(
+    {
+        "explanation": "A list comprehension builds a new list by transforming each item.",
+        "example": "[x * 2 for x in [1, 2]] gives [2, 4].",
+        "question": "What does [x for x in []] produce?",
+    }
+)
+
 
 class FakeLLMManager:
     name = "fake"

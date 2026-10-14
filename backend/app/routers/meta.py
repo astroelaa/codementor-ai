@@ -1,6 +1,9 @@
 """Health check and sample snippets. No authentication required."""
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session as DbSession
 
 from app import deps
 from app.schemas import HealthResponse, SnippetResponse
@@ -18,6 +21,39 @@ def health(request: Request):
         environment=settings.environment,
         # Provider names only. Keys are never exposed by any endpoint.
         providers_configured=manager.configured_names,
+    )
+
+
+@router.get("/ready")
+def ready(request: Request):
+    """Readiness: genuinely checks the database and provider configuration.
+
+    No AI call is made. Returns 200 only when the database answers and at
+    least one provider is configured (or none is required in dev).
+    """
+    checks: dict = {}
+    status_code = 200
+    try:
+        factory = request.app.state.session_factory
+        db: DbSession = factory()
+        try:
+            db.execute(text("SELECT 1"))
+            checks["database"] = "ok"
+        finally:
+            db.close()
+    except Exception:
+        checks["database"] = "unreachable"
+        status_code = 503
+    providers = request.app.state.llm_manager.configured_names
+    checks["providers_configured"] = providers
+    if not providers:
+        checks["providers_note"] = "no AI provider configured"
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ready" if status_code == 200 else "not-ready",
+            **checks,
+        },
     )
 
 

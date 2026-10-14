@@ -186,3 +186,92 @@ class HealthResponse(BaseModel):
     status: str
     environment: str
     providers_configured: list[str]
+
+
+# --- Dashboard / learning ---------------------------------------------------
+class SessionSummary(BaseModel):
+    id: str
+    language: str
+    status: str
+    understanding_score: int
+    message_count: int
+    updated_at: datetime
+
+
+class LanguageStat(BaseModel):
+    language: str
+    sessions: int
+
+
+class WeakSpot(BaseModel):
+    type: str
+    count: int
+
+
+class DashboardResponse(BaseModel):
+    total_sessions: int
+    solved_sessions: int
+    streak_days: int
+    avg_understanding: int
+    languages: list[LanguageStat] = Field(default_factory=list)
+    weak_spots: list[WeakSpot] = Field(default_factory=list)
+    badges: list[BadgeResponse] = Field(default_factory=list)
+    recent_sessions: list[SessionSummary] = Field(default_factory=list)
+
+
+class SkillProgressResponse(BaseModel):
+    slug: str
+    name: str
+    encounters: int
+    score: int
+
+
+class PathItemResponse(BaseModel):
+    id: str
+    title: str
+    detail: str
+    status: str
+    position: int
+
+    model_config = {"from_attributes": True}
+
+
+class PathItemUpdate(BaseModel):
+    status: Literal["todo", "doing", "done"]
+
+
+class LearningPathResponse(BaseModel):
+    id: str
+    title: str
+    source: str  # "weak-spots" | "starter" — generated picks, not measured progress
+    is_active: bool
+    created_at: datetime
+    items: list[PathItemResponse] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+# --- Documentation simplifier ----------------------------------------------
+class DocSimplifyRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+    language: str = Field(default="", max_length=32)
+
+
+class DocSimplifyResponse(BaseModel):
+    id: str
+    explanation: str
+    example: str
+    question: str
+    created_at: datetime
+
+
+class DocHistoryItem(BaseModel):
+    id: str
+    language: str
+    input_text: str
+    explanation: str
+    example: str
+    question: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

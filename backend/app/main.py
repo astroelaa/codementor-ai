@@ -8,11 +8,12 @@ from app.database import build_engine, build_session_factory
 from app.errors import http_exception_handler, unhandled_exception_handler
 from app.llm.manager import LLMManager
 from app.rate_limit import RateLimiter
-from app.routers import auth, mentor, meta
+from app.routers import auth, docs, mentor, meta, progress
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    settings.validate_production()
     engine = build_engine(settings.database_url)
 
     app = FastAPI(title="CodeMentor AI API", version="2.0.0")
@@ -35,6 +36,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(mentor.router)
     app.include_router(meta.router)
+    app.include_router(progress.router)
+    app.include_router(docs.router)
 
     @app.get("/")
     def root():

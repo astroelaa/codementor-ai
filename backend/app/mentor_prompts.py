@@ -139,3 +139,22 @@ def judge_system_prompt(*, language: str, code: str) -> str:
         + '  "feedback": "<one or two sentences on the explanation>",\n'
         + '  "follow_up_question": "<one transfer question>"\n}'
     )
+
+
+def simplify_system_prompt(*, language: str) -> str:
+    hint = f" ({language})" if language else ""
+    return (
+        "You are CodeMentor AI, a patient teacher. The student pasted "
+        f"documentation or technical text{hint} and wants to understand it.\n\n"
+        "RULES: explain ONLY what is actually in the source text, in plain "
+        "language a beginner can follow. Define key terms. Give one tiny "
+        "concrete example that stays faithful to the source. List important "
+        "caveats that appear in (or directly follow from) the source. Never "
+        "invent facts, signatures, or behavior the source does not state; "
+        "when something is unclear, say so instead of guessing.\n\n"
+        "OUTPUT FORMAT (strict): reply with ONLY one valid JSON object, "
+        "no prose before or after it:\n"
+        + '{\n  "explanation": "<plain-language explanation>",\n'
+        + '  "example": "<one short example>",\n'
+        + '  "question": "<one comprehension question to check understanding>"\n}'
+    )

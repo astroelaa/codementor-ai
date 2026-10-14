@@ -67,6 +67,25 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.environment.lower() == "production"
 
+    def validate_production(self) -> None:
+        """Fail fast when production would run on unsafe defaults."""
+        if not self.is_production:
+            return
+        problems: list[str] = []
+        if self.jwt_secret == "development-only-secret-change-me":
+            problems.append("JWT_SECRET still holds the development default")
+        elif len(self.jwt_secret) < 32:
+            problems.append("JWT_SECRET must be at least 32 characters")
+        if not self.database_url.startswith("postgresql"):
+            problems.append(
+                "DATABASE_URL must be PostgreSQL in production "
+                "(SQLite is local-dev only)"
+            )
+        if problems:
+            raise RuntimeError(
+                "Unsafe production configuration: " + "; ".join(problems)
+            )
+
 
 @lru_cache
 def get_settings() -> Settings:

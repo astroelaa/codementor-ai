@@ -202,6 +202,7 @@ class LearningPath(Base):
         String(36), ForeignKey("users.id"), index=True
     )
     title: Mapped[str] = mapped_column(String(200))
+    source: Mapped[str] = mapped_column(String(32), default="weak-spots")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now
