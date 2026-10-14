@@ -27,6 +27,15 @@ const Signup = lazy(() =>
 const Workspace = lazy(() =>
   import("./pages/Workspace").then((m) => ({ default: m.Workspace })),
 );
+const Dashboard = lazy(() =>
+  import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })),
+);
+const History = lazy(() =>
+  import("./pages/History").then((m) => ({ default: m.History })),
+);
+const Docs = lazy(() =>
+  import("./pages/Docs").then((m) => ({ default: m.Docs })),
+);
 const LegalPrivacy = lazy(() =>
   import("./pages/Legal").then((m) => ({ default: m.Privacy })),
 );
@@ -65,6 +74,9 @@ function Shell() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/app" element={<Workspace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/docs" element={<Docs />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/privacy" element={<LegalPrivacy />} />

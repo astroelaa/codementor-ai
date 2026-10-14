@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -65,6 +65,7 @@ export function Workspace() {
   const toast = useToast();
 
   const [langSel, setLangSel] = useState<string>("auto");
+  const [goal, setGoal] = useState("debug");
   const [code, setCode] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [status, setStatus] = useState<"active" | "solved" | null>(null);
@@ -85,6 +86,8 @@ export function Workspace() {
   const [guestCapped, setGuestCapped] = useState(false);
 
   const logRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [resuming, setResuming] = useState(() => searchParams.get("session") !== null);
   const {
     data: snippets,
     isError: serverUnreachable,
@@ -129,6 +132,49 @@ export function Workspace() {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streaming, thinking]);
+
+  // Resume a persisted session (?session=<id>): survives refresh + login.
+  useEffect(() => {
+    const resumeId = searchParams.get("session");
+    if (!resumeId || sessionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await api.getSession(resumeId);
+        if (cancelled) return;
+        setSessionId(s.id);
+        setStatus(s.status);
+        setCode(s.code);
+        setLangSel(s.language);
+        setGoal(s.goal || "debug");
+        setScore(s.understanding_score);
+        setHintsLeft(s.hints_left);
+        setTopics([]);
+        setMessages(
+          s.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            misconception:
+              ((m.meta ?? {}) as { misconception?: Misconception | null })
+                .misconception ?? null,
+          })),
+        );
+        if (s.guest_token) tokenStore.guest = s.guest_token;
+      } catch {
+        if (!cancelled) {
+          toast("error", "Could not reopen that session. Start a new one.");
+          setSearchParams({});
+        }
+      } finally {
+        if (!cancelled) setResuming(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleApiError(err: unknown) {
     if (err instanceof ApiError && err.status === 403 && err.message.includes("1 free session")) {
@@ -200,7 +246,7 @@ export function Workspace() {
     setStarting(true);
     setGuestCapped(false);
     try {
-      const s = await api.createSession(langSel, code);
+      const s = await api.createSession(langSel, code, goal);
       if (s.guest_token) tokenStore.guest = s.guest_token;
       // Sync the selector to the server-stored language (authoritative).
       setLangSel(s.language);
@@ -292,6 +338,7 @@ export function Workspace() {
     setExplanation("");
     setExplainOpen(false);
     setGuestCapped(false);
+    setSearchParams({});
   }
 
   const sessionMisconceptions = useMemo(() => {
@@ -322,6 +369,7 @@ export function Workspace() {
                 {status}
               </span>
             )}
+            {status && <span className="tag">{goal}</span>}
             {provider && <span className="tag">via {provider}</span>}
             {inSession && (
               <button type="button" onClick={reset} className="btn btn-ghost btn-sm" disabled={busy}>
@@ -429,13 +477,51 @@ export function Workspace() {
               />
               <div className="flex flex-wrap items-center gap-3 border-t border-(--border) px-4 py-3">
                 {!inSession ? (
-                  <>
-                    <button type="button" onClick={start} className="btn btn-primary" disabled={starting}>
-                      {starting ? <Loader2 size={16} strokeWidth={1.5} className="animate-spin" /> : <Play size={16} strokeWidth={1.5} />}
-                      {starting ? "Starting…" : "Diagnose"}
-                    </button>
-                    <span className="text-xs text-(--faint)">No answer is ever shown — only questions.</span>
-                  </>
+                  resuming ? (
+                    <span className="flex items-center gap-2 text-sm text-(--muted)">
+                      <Loader2 size={16} strokeWidth={1.5} className="animate-spin" />
+                      Reopening your session…
+                    </span>
+                  ) : (
+                    <>
+                      <div className="flex gap-1.5" role="radiogroup" aria-label="Session goal">
+                        {(
+                          [
+                            ["debug", "Debug"],
+                            ["review", "Review"],
+                            ["explain", "Explain"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <button
+                            key={value}
+                            role="radio"
+                            aria-checked={goal === value}
+                            type="button"
+                            onClick={() => setGoal(value)}
+                            title={
+                              value === "debug"
+                                ? "Find and fix a bug"
+                                : value === "review"
+                                  ? "Review quality and best practices"
+                                  : "Understand how the code works"
+                            }
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              goal === value
+                                ? "bg-(--accent-soft) text-(--accent-text)"
+                                : "text-(--muted) hover:text-(--text)"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <button type="button" onClick={start} className="btn btn-primary" disabled={starting}>
+                        {starting ? <Loader2 size={16} strokeWidth={1.5} className="animate-spin" /> : <Play size={16} strokeWidth={1.5} />}
+                        {starting ? "Starting…" : "Diagnose"}
+                      </button>
+                      <span className="text-xs text-(--faint)">No answer is ever shown — only questions.</span>
+                    </>
+                  )
                 ) : (
                   <span className="text-xs text-(--faint)">
                     Code is locked while the session runs. Start a new session to change it.

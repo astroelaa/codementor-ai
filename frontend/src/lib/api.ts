@@ -45,6 +45,7 @@ export interface ChatMessage {
 export interface SessionDetail {
   id: string;
   language: string;
+  goal: string;
   code: string;
   status: "active" | "solved";
   understanding_score: number;
@@ -55,6 +56,63 @@ export interface SessionDetail {
   guest_token: string | null;
   badges_earned: Badge[];
   messages: ChatMessage[];
+}
+export interface SessionSummary {
+  id: string;
+  language: string;
+  status: string;
+  understanding_score: number;
+  message_count: number;
+  updated_at: string;
+}
+export interface SessionListItem extends SessionSummary {
+  goal: string;
+  code: string;
+  created_at: string;
+  solved_at: string | null;
+  hints_left: number;
+}
+export interface DashboardData {
+  total_sessions: number;
+  solved_sessions: number;
+  streak_days: number;
+  avg_understanding: number;
+  languages: { language: string; sessions: number }[];
+  weak_spots: { type: string; count: number }[];
+  badges: Badge[];
+  recent_sessions: SessionSummary[];
+}
+export interface SkillProgress {
+  slug: string;
+  name: string;
+  encounters: number;
+  score: number;
+}
+export interface PathItem {
+  id: string;
+  title: string;
+  detail: string;
+  status: "todo" | "doing" | "done";
+  position: number;
+}
+export interface LearningPath {
+  id: string;
+  title: string;
+  source: "weak-spots" | "starter" | string;
+  is_active: boolean;
+  created_at: string;
+  items: PathItem[];
+}
+export interface DocResult {
+  id: string;
+  explanation: string;
+  example: string;
+  question: string;
+  created_at: string;
+}
+export interface DocHistoryItem extends DocResult {
+  language: string;
+  input_text: string;
 }
 export interface MentorTurn {
   reply: string;
@@ -158,11 +216,14 @@ export const api = {
   },
 
   /* ---------- mentor ---------- */
-  createSession(language: string, code: string): Promise<SessionDetail> {
+  createSession(language: string, code: string, goal = "debug"): Promise<SessionDetail> {
     return request<SessionDetail>("/api/sessions", {
       method: "POST",
-      body: JSON.stringify({ language, code }),
+      body: JSON.stringify({ language, code, goal }),
     });
+  },
+  listSessions(): Promise<SessionListItem[]> {
+    return request<SessionListItem[]>("/api/sessions");
   },
   getSession(id: string): Promise<SessionDetail> {
     return request<SessionDetail>(`/api/sessions/${id}`);
@@ -184,6 +245,33 @@ export const api = {
   },
   snippets(): Promise<Snippet[]> {
     return request<Snippet[]>("/api/snippets");
+  },
+  dashboard(): Promise<DashboardData> {
+    return request<DashboardData>("/api/dashboard");
+  },
+  skills(): Promise<SkillProgress[]> {
+    return request<SkillProgress[]>("/api/skills");
+  },
+  learningPath(): Promise<LearningPath | null> {
+    return request<LearningPath | null>("/api/learning-path");
+  },
+  regeneratePath(): Promise<LearningPath> {
+    return request<LearningPath>("/api/learning-path/regenerate", { method: "POST" });
+  },
+  updatePathItem(id: string, status: string): Promise<PathItem> {
+    return request<PathItem>(`/api/learning-path/items/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  },
+  simplifyDocs(text: string, language: string): Promise<DocResult> {
+    return request<DocResult>("/api/docs/simplify", {
+      method: "POST",
+      body: JSON.stringify({ text, language }),
+    });
+  },
+  docHistory(): Promise<DocHistoryItem[]> {
+    return request<DocHistoryItem[]>("/api/docs/history");
   },
   health(): Promise<{ status: string; providers_configured: string[] }> {
     return request("/health");

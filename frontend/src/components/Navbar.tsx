@@ -8,6 +8,9 @@ import { useTheme } from "../lib/theme";
 
 const LINKS = [
   { to: "/app", label: "Demo", anchor: false },
+  { to: "/dashboard", label: "Dashboard", anchor: false },
+  { to: "/history", label: "History", anchor: false },
+  { to: "/docs", label: "Docs", anchor: false },
   { to: "/#method", label: "Method", anchor: true },
   { to: "/#features", label: "Features", anchor: true },
   { to: "/#faq", label: "FAQ", anchor: true },
@@ -25,7 +28,7 @@ export function Navbar() {
         <Link to="/" aria-label="CodeMentor AI home">
           <Logo />
         </Link>
-        <nav className="ml-6 hidden items-center gap-6 md:flex" aria-label="Primary">
+        <nav className="ml-6 hidden items-center gap-5 lg:flex" aria-label="Primary">
           {LINKS.map((l) =>
             l.anchor ? (
               <AnchorLink
@@ -88,21 +91,24 @@ export function Navbar() {
             onClick={() => setOpen((o) => !o)}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
-            className="grid size-9 place-items-center rounded-[10px] border border-(--border) md:hidden"
+            className="grid size-9 place-items-center rounded-[10px] border border-(--border) lg:hidden"
           >
             {open ? <X size={17} strokeWidth={1.5} /> : <Menu size={17} strokeWidth={1.5} />}
           </button>
         </div>
       </div>
         {open && (
-        <nav className="border-t border-(--border) px-[4%] py-3 md:hidden" aria-label="Mobile">
-          <NavLink
-            to="/app"
-            onClick={() => setOpen(false)}
-            className="block py-2.5 text-[15px] text-(--muted)"
-          >
-            Demo
-          </NavLink>
+        <nav className="border-t border-(--border) px-[4%] py-3 lg:hidden" aria-label="Mobile">
+          {LINKS.filter((l) => !l.anchor).map((l) => (
+            <NavLink
+              key={l.label}
+              to={l.to}
+              onClick={() => setOpen(false)}
+              className="block py-2.5 text-[15px] text-(--muted)"
+            >
+              {l.label}
+            </NavLink>
+          ))}
           {LINKS.filter((l) => l.anchor).map((l) => (
             <AnchorLink
               key={l.label}

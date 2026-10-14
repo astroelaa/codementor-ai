@@ -63,6 +63,14 @@ Live Groq turn verified 2026-10-09 (HTTP 200, Socratic reply, no code leaked).
 - New `/ready` endpoint checks the database with `SELECT 1` and reports
   provider configuration (no AI call); `/health` stays liveness-only.
 - Suite grew 38 → 55 tests (progress, docs, ops, detection, prompts).
+- Review goals: `goal` (debug/review/explain) stored per session, goal-specific
+  prompt preambles, same stable response schema; tested.
+- Frontend pages: Dashboard (real stats/weak-spots/badges/path), History
+  (replay + continue via `?session=` resume, which also fixes refresh
+  persistence), Docs simplifier + history. Verified in-browser with live data.
+- Navbar collapses to hamburger below 1024px (7 links no longer crowd).
+- Lesson: dev `codementor.db` needed `alembic upgrade head` after the goal
+  migration; tests use isolated migrated DBs and were unaffected.
 
 ## 6. Outstanding deployment blockers (account actions)
 
