@@ -132,6 +132,11 @@ export interface ExplainResult {
   hints_left: number;
   badges_earned: Badge[];
 }
+export interface RegistryLanguage {
+  key: string;
+  label: string;
+  highlight: string;
+}
 export interface Snippet {
   language: string;
   title: string;
@@ -245,6 +250,9 @@ export const api = {
   },
   snippets(): Promise<Snippet[]> {
     return request<Snippet[]>("/api/snippets");
+  },
+  languages(): Promise<RegistryLanguage[]> {
+    return request<RegistryLanguage[]>("/api/languages");
   },
   dashboard(): Promise<DashboardData> {
     return request<DashboardData>("/api/dashboard");

@@ -178,4 +178,51 @@ SAMPLE_SNIPPETS: dict[str, SnippetResponse] = {
             "-- Why does AVG skip those rows, and how would you show 0 instead?"
         ),
     ),
+    "c": SnippetResponse(
+        language="c",
+        title="Average of an array",
+        description=(
+            "Compiles without warnings, yet the answer is always rounded "
+            "down. A C classic."
+        ),
+        code=(
+            "#include <stdio.h>\n"
+            "\n"
+            "double average(int arr[], int n) {\n"
+            "    int total = 0;\n"
+            "    for (int i = 0; i < n; i++) {\n"
+            "        total += arr[i];\n"
+            "    }\n"
+            "    return total / n;\n"
+            "}\n"
+            "\n"
+            "int main(void) {\n"
+            "    int a[] = {2, 4, 5};\n"
+            '    printf("%f\\n", average(a, 3));\n'
+            "    return 0;\n"
+            "}"
+        ),
+    ),
+    "rust": SnippetResponse(
+        language="rust",
+        title="Average of a slice",
+        description=(
+            "The compiler is happy, but the program panics on every run. "
+            "The loop disagrees with the slice about where it ends."
+        ),
+        code=(
+            "fn average(nums: &[f64]) -> f64 {\n"
+            "    let mut total = 0.0;\n"
+            "    for i in 1..=nums.len() {\n"
+            "        total += nums[i];\n"
+            "    }\n"
+            "    total / nums.len() as f64\n"
+            "}\n"
+            "\n"
+            "fn main() {\n"
+            "    let values = vec![2.0, 4.0, 6.0];\n"
+            '    println!("{}", average(&values));\n'
+            "}"
+        ),
+    ),
 }

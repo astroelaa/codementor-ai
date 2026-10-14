@@ -6,7 +6,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session as DbSession
 
 from app import deps
-from app.schemas import HealthResponse, SnippetResponse
+from app.schemas import HealthResponse, LanguageInfoResponse, SnippetResponse
+from app.services.languages import LANGUAGES
 from app.services.snippets import SAMPLE_SNIPPETS
 
 router = APIRouter(tags=["meta"])
@@ -64,3 +65,25 @@ def list_snippets(language: str | None = None):
     if language is not None:
         return [SAMPLE_SNIPPETS[language]]
     return list(SAMPLE_SNIPPETS.values())
+
+
+@router.get("/api/languages", response_model=list[LanguageInfoResponse])
+def list_languages():
+    """Authoritative language registry: capabilities, docs, honesty flags."""
+    return [
+        LanguageInfoResponse(
+            key=info.key,
+            label=info.label,
+            aliases=list(info.aliases),
+            extensions=list(info.extensions),
+            editor=info.editor,
+            highlight=info.highlight,
+            concepts=list(info.concepts),
+            docs=[
+                {"title": d.title, "url": d.url, "license": d.license}
+                for d in info.docs
+            ],
+            execution=info.execution,
+        )
+        for info in LANGUAGES.values()
+    ]

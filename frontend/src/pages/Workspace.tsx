@@ -105,6 +105,19 @@ export function Workspace() {
     return map;
   }, [snippets]);
 
+  // Authoritative list comes from the backend registry; the local list is
+  // only a fallback so the selector works while offline.
+  const { data: registry } = useQuery({
+    queryKey: ["languages"],
+    queryFn: api.languages,
+    staleTime: Infinity,
+    retry: 1,
+  });
+  const langOptions = useMemo(
+    () => registry?.map((l) => ({ value: l.key, label: l.label })) ?? LANGUAGES,
+    [registry],
+  );
+
   // Effective language for highlighting: manual choice wins, otherwise a
   // client-side guess (the backend re-detects authoritatively on create).
   const effectiveLanguage = useMemo(
@@ -442,7 +455,7 @@ export function Workspace() {
                   <option value="auto">
                     Auto{langSel === "auto" ? ` (${effectiveLanguage})` : ""}
                   </option>
-                  {LANGUAGES.map((l) => (
+                  {langOptions.map((l) => (
                     <option key={l.value} value={l.value}>
                       {l.label}
                     </option>

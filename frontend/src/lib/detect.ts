@@ -10,8 +10,11 @@ export type Lang =
   | "cpp"
   | "csharp"
   | "go"
-  | "sql";
+  | "sql"
+  | "c"
+  | "rust";
 
+/* Local fallback only — the workspace prefers GET /api/languages. */
 export const LANGUAGES: { value: Lang; label: string }[] = [
   { value: "python", label: "Python" },
   { value: "javascript", label: "JavaScript" },
@@ -21,6 +24,8 @@ export const LANGUAGES: { value: Lang; label: string }[] = [
   { value: "csharp", label: "C#" },
   { value: "go", label: "Go" },
   { value: "sql", label: "SQL" },
+  { value: "c", label: "C" },
+  { value: "rust", label: "Rust" },
 ];
 
 const RULES: { lang: Lang; patterns: RegExp[] }[] = [
@@ -30,7 +35,7 @@ const RULES: { lang: Lang; patterns: RegExp[] }[] = [
   },
   {
     lang: "javascript",
-    patterns: [/\bfunction\s+\w*\s*\(/, /=>/, /\bconsole\.(log|error)/, /^\s*(let|const|var)\s+\w+/m, /===/],
+    patterns: [/\bfunction\s+\w*\s*\(/, /=>/, /\bconsole\.(log|error)/, /^\s*(let|const|var)\s+(?!mut\b)\w+/m, /===/],
   },
   {
     lang: "typescript",
@@ -43,6 +48,14 @@ const RULES: { lang: Lang; patterns: RegExp[] }[] = [
   {
     lang: "sql",
     patterns: [/^\s*SELECT\s+/im, /\bFROM\s+\w+/i, /\bWHERE\s+/i, /\bGROUP\s+BY\s+/i],
+  },
+  {
+    lang: "c",
+    patterns: [/#include\s*<stdio\.h>/, /\bprintf\s*\(/, /\bscanf\s*\(/, /\bmain\s*\(\s*void\s*\)/],
+  },
+  {
+    lang: "rust",
+    patterns: [/\bfn\s+main\s*\(/, /println!\s*\(/, /\blet\s+mut\s+/, /\bmatch\s+\w+\s*\{/],
   },
 ];
 

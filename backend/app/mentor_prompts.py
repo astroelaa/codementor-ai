@@ -80,6 +80,22 @@ The student's current code:
 """
 
 
+def _language_block(language: str) -> str:
+    """Per-language mentor guidance from the authoritative registry."""
+    try:
+        from app.services.languages import get_language
+    except Exception:
+        return ""
+    info = get_language(language)
+    if info is None:
+        return ""
+    concepts = "; ".join(info.concepts)
+    return (
+        f"LANGUAGE GUIDANCE ({info.label}): {info.prompt_note} "
+        f"Key concepts for this language: {concepts}."
+    )
+
+
 def chat_system_prompt(
     *, language: str, code: str, hints_left: int, goal: str = "debug"
 ) -> str:
@@ -91,6 +107,8 @@ def chat_system_prompt(
         )
         + "\n\n"
         + STUDENT_CODE_BLOCK.format(code=code)
+        + "\n\n"
+        + _language_block(language)
         + "\n\nOUTPUT FORMAT (strict): reply with ONLY one valid JSON object, "
         + "no prose before or after it:\n"
         + '{\n  "reply": "your message ending with one question",\n'
@@ -115,6 +133,8 @@ def stream_system_prompt(
         )
         + "\n\n"
         + STUDENT_CODE_BLOCK.format(code=code)
+        + "\n\n"
+        + _language_block(language)
         + "\n\nOUTPUT FORMAT (strict): plain text only. No JSON, no markdown "
         + "headers, no code blocks. End with exactly one question."
     )
@@ -146,6 +166,8 @@ def hint_system_prompt(
         f"is debugging {language} code and explicitly asked for a hint "
         f"(hints remaining after this one: {hints_left}).\n\n"
         + STUDENT_CODE_BLOCK.format(code=code)
+        + "\n"
+        + _language_block(language)
         + "\nRULES: give exactly ONE small hint that narrows the search without "
         "revealing the fix. Never show fixed, corrected or partial code. "
         "Never ask for code that is already provided above. "

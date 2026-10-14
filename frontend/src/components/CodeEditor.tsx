@@ -4,6 +4,7 @@ import { go } from "@codemirror/lang-go";
 import { java } from "@codemirror/lang-java";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
+import { rust } from "@codemirror/lang-rust";
 import { sql } from "@codemirror/lang-sql";
 import { useTheme } from "../lib/theme";
 
@@ -19,6 +20,10 @@ function extensionFor(language: string) {
       return java();
     case "cpp":
       return cpp();
+    case "c":
+      return cpp(); // C shares the C++ grammar (preprocessor + C syntax)
+    case "rust":
+      return rust();
     case "go":
       return go();
     case "sql":

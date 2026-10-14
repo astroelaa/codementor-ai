@@ -44,7 +44,8 @@ class UpdateProfileRequest(BaseModel):
 
 # --- Mentor ---------------------------------------------------------------
 Language = Literal[
-    "python", "javascript", "typescript", "java", "cpp", "csharp", "go", "sql"
+    "python", "javascript", "typescript", "java", "cpp", "csharp", "go", "sql",
+    "c", "rust",
 ]
 
 
@@ -59,6 +60,8 @@ class SessionCreate(BaseModel):
         "csharp",
         "go",
         "sql",
+        "c",
+        "rust",
         "auto",
     ] = "auto"
     code: str = Field(min_length=1, max_length=8000)
@@ -196,6 +199,25 @@ class HealthResponse(BaseModel):
     status: str
     environment: str
     providers_configured: list[str]
+
+
+# --- Language registry ------------------------------------------------------
+class DocLinkResponse(BaseModel):
+    title: str
+    url: str
+    license: str
+
+
+class LanguageInfoResponse(BaseModel):
+    key: str
+    label: str
+    aliases: list[str] = Field(default_factory=list)
+    extensions: list[str] = Field(default_factory=list)
+    editor: str
+    highlight: str
+    concepts: list[str] = Field(default_factory=list)
+    docs: list[DocLinkResponse] = Field(default_factory=list)
+    execution: str
 
 
 # --- Dashboard / learning ---------------------------------------------------
