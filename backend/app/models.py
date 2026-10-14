@@ -69,6 +69,9 @@ class User(Base):
     doc_simplifications: Mapped[list["DocSimplification"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    projects: Mapped[list["Project"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Session(Base):
@@ -85,6 +88,9 @@ class Session(Base):
     )
     language: Mapped[str] = mapped_column(String(32), default="python")
     goal: Mapped[str] = mapped_column(String(20), default="debug")
+    project_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=True, index=True
+    )
     code: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active|solved
     understanding_score: Mapped[int] = mapped_column(Integer, default=0)
@@ -230,6 +236,71 @@ class PathItem(Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
 
     path: Mapped[LearningPath] = relationship(back_populates="items")
+
+
+class Project(Base):
+    """A user's software project: brief, milestones, and task progress."""
+
+    __tablename__ = "projects"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    objective: Mapped[str] = mapped_column(Text, default="")
+    language: Mapped[str] = mapped_column(String(32), default="python")
+    stack: Mapped[str] = mapped_column(String(200), default="")
+    architecture: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active|done
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
+
+    user: Mapped[User] = relationship(back_populates="projects")
+    milestones: Mapped[list["Milestone"]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="Milestone.position",
+    )
+
+
+class Milestone(Base):
+    __tablename__ = "milestones"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    detail: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="todo")  # todo|doing|done
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    project: Mapped[Project] = relationship(back_populates="milestones")
+    tasks: Mapped[list["ProjectTask"]] = relationship(
+        back_populates="milestone",
+        cascade="all, delete-orphan",
+        order_by="ProjectTask.position",
+    )
+
+
+class ProjectTask(Base):
+    __tablename__ = "project_tasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    milestone_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("milestones.id"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    detail: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="todo")  # todo|doing|done
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    milestone: Mapped[Milestone] = relationship(back_populates="tasks")
 
 
 class Badge(Base):

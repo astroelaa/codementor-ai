@@ -20,7 +20,7 @@ from app.mentor_prompts import (
     meta_system_prompt,
     stream_system_prompt,
 )
-from app.models import Hint, Message, Misconception, Session as DebugSession, User
+from app.models import Hint, Message, Misconception, Project, Session as DebugSession, User
 from app.rate_limit import limit
 from app.schemas import (
     BadgeResponse,
@@ -94,6 +94,7 @@ def _session_base(
         id=session.id,
         language=session.language,
         goal=session.goal,
+        project_id=session.project_id,
         code=session.code,
         status=session.status,
         understanding_score=session.understanding_score,
@@ -288,6 +289,20 @@ def create_session(
         code=payload.code.strip(),
         status="active",
     )
+    if payload.project_id:
+        if user is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Linking a session to a project requires an account.",
+            )
+        project = (
+            db.query(Project)
+            .filter(Project.id == payload.project_id, Project.user_id == user.id)
+            .first()
+        )
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found.")
+        session.project_id = project.id
     db.add(session)
     db.commit()
     db.refresh(session)

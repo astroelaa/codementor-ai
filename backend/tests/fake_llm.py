@@ -55,6 +55,18 @@ DOC_JSON = json.dumps(
     }
 )
 
+BRIEF_JSON = json.dumps(
+    {
+        "objective": "Build a CLI todo app that stores tasks in a file.",
+        "requirements": ["Add tasks", "List tasks", "Mark tasks done"],
+        "architecture": "Single module with functions per command.",
+        "milestones": [
+            {"title": "Storage", "tasks": ["Design file format", "Write save/load"]},
+            {"title": "CLI", "tasks": ["Add command", "List command"]},
+        ],
+    }
+)
+
 
 class FakeLLMManager:
     name = "fake"

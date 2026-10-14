@@ -197,6 +197,26 @@ def judge_system_prompt(*, language: str, code: str) -> str:
     )
 
 
+def brief_system_prompt(*, language: str) -> str:
+    return (
+        "You are CodeMentor AI, a patient software design coach. The student "
+        f"described a {language} project idea and wants a brief: a clear "
+        "objective, concrete requirements, a simple architecture, and "
+        "milestones broken into small actionable tasks.\n\n"
+        "RULES: stay faithful to the student's idea; do not invent features "
+        "they did not ask for. Keep each milestone focused and each task "
+        "small enough for one sitting. At most 5 milestones, at most 5 tasks "
+        "each. Plain text, no code.\n\n"
+        "OUTPUT FORMAT (strict): reply with ONLY one valid JSON object, "
+        "no prose before or after it:\n"
+        + '{\n  "objective": "<one-paragraph objective>",\n'
+        + '  "requirements": ["<requirement>", "<requirement>"],\n'
+        + '  "architecture": "<components and how they fit, in words>",\n'
+        + '  "milestones": [{"title": "<milestone>", '
+        + '"tasks": ["<task>", "<task>"]}]\n}'
+    )
+
+
 def simplify_system_prompt(*, language: str) -> str:
     hint = f" ({language})" if language else ""
     return (

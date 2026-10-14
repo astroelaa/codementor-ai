@@ -66,6 +66,7 @@ class SessionCreate(BaseModel):
     ] = "auto"
     code: str = Field(min_length=1, max_length=8000)
     goal: Literal["debug", "review", "explain"] = "debug"
+    project_id: Optional[str] = None
 
 
 class MessageCreate(BaseModel):
@@ -149,6 +150,7 @@ class SessionBase(BaseModel):
     id: str
     language: str
     goal: str = "debug"
+    project_id: Optional[str] = None
     code: str
     status: str
     understanding_score: int
@@ -218,6 +220,114 @@ class LanguageInfoResponse(BaseModel):
     concepts: list[str] = Field(default_factory=list)
     docs: list[DocLinkResponse] = Field(default_factory=list)
     execution: str
+
+
+# --- Projects, milestones, tasks ----------------------------------------------
+class ProjectCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    objective: str = Field(default="", max_length=4000)
+    language: str = "python"
+    stack: str = Field(default="", max_length=200)
+
+
+class ProjectUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=200)
+    objective: Optional[str] = Field(default=None, max_length=4000)
+    language: Optional[str] = None
+    stack: Optional[str] = Field(default=None, max_length=200)
+    architecture: Optional[str] = Field(default=None, max_length=4000)
+    status: Optional[Literal["active", "done"]] = None
+
+
+class TaskResponse(BaseModel):
+    id: str
+    title: str
+    detail: str
+    status: str
+    position: int
+
+    model_config = {"from_attributes": True}
+
+
+class TaskCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    detail: str = Field(default="", max_length=2000)
+
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=200)
+    detail: Optional[str] = Field(default=None, max_length=2000)
+    status: Optional[Literal["todo", "doing", "done"]] = None
+
+
+class MilestoneResponse(BaseModel):
+    id: str
+    title: str
+    detail: str
+    status: str
+    position: int
+    tasks: list[TaskResponse] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class MilestoneCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    detail: str = Field(default="", max_length=2000)
+
+
+class MilestoneUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=200)
+    detail: Optional[str] = Field(default=None, max_length=2000)
+    status: Optional[Literal["todo", "doing", "done"]] = None
+
+
+class ProjectSummary(BaseModel):
+    id: str
+    title: str
+    language: str
+    status: str
+    milestone_count: int
+    open_task_count: int
+    updated_at: datetime
+
+
+class ProjectDetailResponse(BaseModel):
+    id: str
+    title: str
+    objective: str
+    language: str
+    stack: str
+    architecture: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    milestones: list[MilestoneResponse] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class BriefRequest(BaseModel):
+    description: str = Field(min_length=10, max_length=4000)
+
+
+class BriefMilestone(BaseModel):
+    title: str
+    tasks: list[str] = Field(default_factory=list)
+
+
+class BriefResponse(BaseModel):
+    objective: str
+    requirements: list[str] = Field(default_factory=list)
+    architecture: str = ""
+    milestones: list[BriefMilestone] = Field(default_factory=list)
+
+
+class NextTaskResponse(BaseModel):
+    done: bool
+    milestone: Optional[MilestoneResponse] = None
+    task: Optional[TaskResponse] = None
+    guidance: str = ""
 
 
 # --- Dashboard / learning ---------------------------------------------------
