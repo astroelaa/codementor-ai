@@ -71,6 +71,21 @@ def test_languages_endpoint_lists_capabilities():
     assert all(row["execution"] == "none" for row in rows.values())
 
 
+def test_resources_endpoint_lists_curated_links():
+    from tests.conftest import client
+
+    r = client.get("/api/resources")
+    assert r.status_code == 200
+    rows = r.json()
+    assert len(rows) >= 10
+    assert all({"language", "title", "url", "license"} <= set(row) for row in rows)
+
+    r = client.get("/api/resources?language=rust")
+    assert r.status_code == 200
+    assert len(r.json()) == 1
+    assert r.json()[0]["url"].startswith("https://")
+
+
 def test_prompt_carries_language_guidance():
     from app.mentor_prompts import chat_system_prompt as chat
 

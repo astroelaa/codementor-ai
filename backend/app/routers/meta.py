@@ -87,3 +87,25 @@ def list_languages():
         )
         for info in LANGUAGES.values()
     ]
+
+
+@router.get("/api/resources")
+def list_resources(language: str | None = None) -> list[dict]:
+    """Curated documentation links (links only — nothing copied or stored).
+
+    Optional ?language= filters to one registry language.
+    """
+    rows = []
+    for key, info in LANGUAGES.items():
+        if language is not None and key != language:
+            continue
+        for doc in info.docs:
+            rows.append(
+                {
+                    "language": key,
+                    "title": doc.title,
+                    "url": doc.url,
+                    "license": doc.license,
+                }
+            )
+    return rows
