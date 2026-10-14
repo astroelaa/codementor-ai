@@ -24,6 +24,12 @@ export function Docs() {
     enabled: !!user,
     retry: 1,
   });
+  const resources = useQuery({
+    queryKey: ["resources"],
+    queryFn: () => api.resources(),
+    staleTime: Infinity,
+    retry: 1,
+  });
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -148,6 +154,33 @@ export function Docs() {
           <div className="mt-5">{renderRecord(result)}</div>
         </Reveal>
       )}
+
+      <div className="mt-8">
+        <h2 className="font-bold">Approved references</h2>
+        <p className="mt-1 text-[13px] text-(--muted)">
+          Official documentation the mentor may cite. Links only — content
+          stays with its owners under their licenses.
+        </p>
+        {resources.data && (
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {resources.data.map((r) => (
+              <li key={`${r.language}-${r.url}`}>
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-xl border border-(--border) bg-(--surface) px-3.5 py-2.5 transition-colors hover:border-(--border-strong)"
+                >
+                  <span className="block text-sm font-semibold">{r.title}</span>
+                  <span className="mt-0.5 block font-mono text-xs text-(--faint)">
+                    {r.language} · {r.license}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="mt-8">
         <h2 className="font-bold">History</h2>

@@ -1,7 +1,8 @@
-# Deploys the static frontend build to GitHub Pages on every push to master
+# Deploys the static frontend build to GitHub Pages on every push to main
 # that touches the frontend. The public backend URL comes from the
-# repository secret VITE_API_URL (set in Settings > Secrets and variables >
-# Actions). No secrets are ever committed.
+# repository VARIABLE VITE_API_BASE_URL (Settings > Secrets and variables >
+# Actions > Variables tab — public config, not a secret). No secrets are
+# ever committed.
 name: Deploy frontend to GitHub Pages
 
 on:

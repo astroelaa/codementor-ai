@@ -8,6 +8,7 @@ import { useTheme } from "../lib/theme";
 
 const LINKS = [
   { to: "/app", label: "Demo", anchor: false },
+  { to: "/projects", label: "Projects", anchor: false },
   { to: "/dashboard", label: "Dashboard", anchor: false },
   { to: "/history", label: "History", anchor: false },
   { to: "/docs", label: "Docs", anchor: false },

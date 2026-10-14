@@ -69,3 +69,14 @@ def test_ready_reports_unreachable_database():
     r = c.get("/ready")
     assert r.status_code == 503
     assert r.json()["database"] == "unreachable"
+
+
+def test_request_id_header_present_and_echoed():
+    from tests.conftest import client
+
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert len(r.headers.get("X-Request-ID", "")) >= 8
+
+    r = client.get("/health", headers={"X-Request-ID": "test-123"})
+    assert r.headers.get("X-Request-ID") == "test-123"

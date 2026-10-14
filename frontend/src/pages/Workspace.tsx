@@ -84,6 +84,7 @@ export function Workspace() {
   const [explainOpen, setExplainOpen] = useState(false);
   const [explaining, setExplaining] = useState(false);
   const [guestCapped, setGuestCapped] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
 
   const logRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -165,6 +166,7 @@ export function Workspace() {
         setScore(s.understanding_score);
         setHintsLeft(s.hints_left);
         setTopics([]);
+        setProjectId(s.project_id ?? null);
         setMessages(
           s.messages.map((m) => ({
             id: m.id,
@@ -260,8 +262,10 @@ export function Workspace() {
     setStarting(true);
     setGuestCapped(false);
     try {
-      const s = await api.createSession(langSel, code, goal);
+      const projectParam = searchParams.get("project");
+      const s = await api.createSession(langSel, code, goal, projectParam);
       if (s.guest_token) tokenStore.guest = s.guest_token;
+      setProjectId(s.project_id);
       // Sync the selector to the server-stored language (authoritative).
       setLangSel(s.language);
       setSessionId(s.id);
@@ -341,6 +345,7 @@ export function Workspace() {
   function reset() {
     setSessionId(null);
     setStatus(null);
+    setProjectId(null);
     setMessages([]);
     setInput("");
     setStreaming("");
@@ -384,6 +389,11 @@ export function Workspace() {
               </span>
             )}
             {status && <span className="tag">{goal}</span>}
+            {projectId && (
+              <Link to="/projects" className="tag" title="Linked project">
+                project
+              </Link>
+            )}
             {provider && <span className="tag">via {provider}</span>}
             {inSession && (
               <button type="button" onClick={reset} className="btn btn-ghost btn-sm" disabled={busy}>

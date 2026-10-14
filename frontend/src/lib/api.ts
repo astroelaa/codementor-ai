@@ -46,6 +46,7 @@ export interface SessionDetail {
   id: string;
   language: string;
   goal: string;
+  project_id: string | null;
   code: string;
   status: "active" | "solved";
   understanding_score: number;
@@ -113,6 +114,60 @@ export interface DocResult {
 export interface DocHistoryItem extends DocResult {
   language: string;
   input_text: string;
+}
+export interface ProjectTask {
+  id: string;
+  title: string;
+  detail: string;
+  status: "todo" | "doing" | "done";
+  position: number;
+}
+export interface Milestone {
+  id: string;
+  title: string;
+  detail: string;
+  status: "todo" | "doing" | "done";
+  position: number;
+  tasks: ProjectTask[];
+}
+export interface ProjectSummary {
+  id: string;
+  title: string;
+  language: string;
+  status: string;
+  milestone_count: number;
+  open_task_count: number;
+  updated_at: string;
+}
+export interface ProjectDetail {
+  id: string;
+  title: string;
+  objective: string;
+  language: string;
+  stack: string;
+  architecture: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  milestones: Milestone[];
+}
+export interface BriefResult {
+  objective: string;
+  requirements: string[];
+  architecture: string;
+  milestones: { title: string; tasks: string[] }[];
+}
+export interface NextTask {
+  done: boolean;
+  milestone: Milestone | null;
+  task: ProjectTask | null;
+  guidance: string;
+}
+export interface ResourceLink {
+  language: string;
+  title: string;
+  url: string;
+  license: string;
 }
 export interface MentorTurn {
   reply: string;
@@ -221,10 +276,10 @@ export const api = {
   },
 
   /* ---------- mentor ---------- */
-  createSession(language: string, code: string, goal = "debug"): Promise<SessionDetail> {
+  createSession(language: string, code: string, goal = "debug", projectId?: string | null): Promise<SessionDetail> {
     return request<SessionDetail>("/api/sessions", {
       method: "POST",
-      body: JSON.stringify({ language, code, goal }),
+      body: JSON.stringify({ language, code, goal, project_id: projectId ?? null }),
     });
   },
   listSessions(): Promise<SessionListItem[]> {
@@ -280,6 +335,61 @@ export const api = {
   },
   docHistory(): Promise<DocHistoryItem[]> {
     return request<DocHistoryItem[]>("/api/docs/history");
+  },
+  resources(language?: string): Promise<ResourceLink[]> {
+    const q = language ? `?language=${encodeURIComponent(language)}` : "";
+    return request<ResourceLink[]>(`/api/resources${q}`);
+  },
+  listProjects(): Promise<ProjectSummary[]> {
+    return request<ProjectSummary[]>("/api/projects");
+  },
+  getProject(id: string): Promise<ProjectDetail> {
+    return request<ProjectDetail>(`/api/projects/${id}`);
+  },
+  createProject(body: { title: string; objective?: string; language?: string; stack?: string }): Promise<ProjectDetail> {
+    return request<ProjectDetail>("/api/projects", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  updateProject(id: string, body: Record<string, string>): Promise<ProjectDetail> {
+    return request<ProjectDetail>(`/api/projects/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  generateBrief(id: string, description: string): Promise<BriefResult> {
+    return request<BriefResult>(`/api/projects/${id}/brief`, {
+      method: "POST",
+      body: JSON.stringify({ description }),
+    });
+  },
+  addMilestone(id: string, title: string, detail = ""): Promise<Milestone> {
+    return request<Milestone>(`/api/projects/${id}/milestones`, {
+      method: "POST",
+      body: JSON.stringify({ title, detail }),
+    });
+  },
+  updateMilestone(id: string, body: Record<string, string>): Promise<Milestone> {
+    return request<Milestone>(`/api/projects/milestones/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  addTask(milestoneId: string, title: string): Promise<ProjectTask> {
+    return request<ProjectTask>(`/api/projects/milestones/${milestoneId}/tasks`, {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    });
+  },
+  updateTask(id: string, body: Record<string, string>): Promise<ProjectTask> {
+    return request<ProjectTask>(`/api/projects/tasks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+  nextTask(id: string): Promise<NextTask> {
+    return request<NextTask>(`/api/projects/${id}/next`);
   },
   health(): Promise<{ status: string; providers_configured: string[] }> {
     return request("/health");

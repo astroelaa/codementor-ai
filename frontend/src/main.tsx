@@ -37,6 +37,9 @@ const History = lazy(() =>
 const Docs = lazy(() =>
   import("./pages/Docs").then((m) => ({ default: m.Docs })),
 );
+const Projects = lazy(() =>
+  import("./pages/Projects").then((m) => ({ default: m.Projects })),
+);
 const LegalPrivacy = lazy(() =>
   import("./pages/Legal").then((m) => ({ default: m.Privacy })),
 );
@@ -103,6 +106,7 @@ function Shell() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/app" element={<Workspace />} />
+            <Route path="/projects" element={<Projects />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/history" element={<History />} />
             <Route path="/docs" element={<Docs />} />
