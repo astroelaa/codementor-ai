@@ -154,6 +154,9 @@ contract stays identical. Set it in the workspace before pressing Diagnose.
   abstraction with fallback, mentor endpoints, tests.
 - **Phase 2** (done): React frontend — design system, landing page, auth screens,
   mentor workspace with streaming.
-- **Phase 3**: dashboard, learning paths, doc simplifier, history, badges.
-- **Phase 4**: animation and accessibility polish, final README.
-- **Phase 5**: production deploy (Render + Neon + GitHub Pages) with live checks.
+- **Phase 3** (done): dashboard, learning paths, doc simplifier, history +
+  replay, badges UI, review goals, measured token usage.
+- **Phase 4** (done): typography/layout review pass, responsive fixes,
+  PWA support, privacy data-flow docs.
+- **Phase 5** (partial): frontend live on GitHub Pages with CI; backend +
+  database deploy pending account access (Neon + host).

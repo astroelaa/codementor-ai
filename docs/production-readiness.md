@@ -79,6 +79,9 @@ Live Groq turn verified 2026-10-09 (HTTP 200, Socratic reply, no code leaked).
   traffic is `NetworkOnly` (no private data cached); SW registration and
   scope verified in-browser; full airplane-mode test still needs a real device.
 - CI workflow runs backend pytest + frontend typecheck/build on code pushes.
+- Fixed a real resume bug found by log forensics: `?session=` hydration only
+  ran on mount, so same-route Continue links silently failed. It now depends
+  on the param; verified with a logged-in replay (code + messages + status).
 
 ## 6. Outstanding deployment blockers (account actions)
 

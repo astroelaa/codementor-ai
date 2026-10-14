@@ -134,9 +134,11 @@ export function Workspace() {
   }, [messages, streaming, thinking]);
 
   // Resume a persisted session (?session=<id>): survives refresh + login.
+  // Depends on the param (not just mount): same-route navigations such as
+  // History "Continue" links must also trigger hydration.
+  const resumeId = searchParams.get("session");
   useEffect(() => {
-    const resumeId = searchParams.get("session");
-    if (!resumeId || sessionId) return;
+    if (!resumeId || resumeId === sessionId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -173,8 +175,7 @@ export function Workspace() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [resumeId]);
 
   function handleApiError(err: unknown) {
     if (err instanceof ApiError && err.status === 403 && err.message.includes("1 free session")) {
