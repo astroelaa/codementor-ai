@@ -30,6 +30,7 @@ def test_message_turn_stores_score_and_misconception(user_headers, fake_llm):
     assert body["hints_left"] == 3
     assert body["misconception"]["type"] == "empty-input"
     assert body["provider"] == "fake"
+    assert body["usage"] is None  # fake provider reports no measured usage
 
     # Replay shows both messages in order.
     r = client.get(f"/api/sessions/{session_id}", headers=user_headers)

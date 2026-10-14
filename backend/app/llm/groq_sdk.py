@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Iterator
 
-from .base import BaseLLMProvider, ChatMessage
+from .base import BaseLLMProvider, ChatMessage, Completion
 from .errors import LLMError
 
 
@@ -40,7 +40,7 @@ class GroqSDKProvider(BaseLLMProvider):
 
     def complete(
         self, *, system: str, messages: list[ChatMessage], temperature: float = 0.4
-    ) -> str:
+    ) -> Completion:
         try:
             resp = self._client().chat.completions.create(
                 model=self.model,
@@ -53,7 +53,19 @@ class GroqSDKProvider(BaseLLMProvider):
         text = ((resp.choices[0].message.content) or "").strip()
         if not text:
             raise LLMError(self.name, "parse", "empty completion")
-        return text
+        usage = None
+        raw_usage = getattr(resp, "usage", None)
+        if raw_usage is not None:
+            prompt = getattr(raw_usage, "prompt_tokens", None)
+            completion_tokens = getattr(raw_usage, "completion_tokens", None)
+            if isinstance(prompt, int) or isinstance(completion_tokens, int):
+                usage = {
+                    "prompt_tokens": prompt if isinstance(prompt, int) else None,
+                    "completion_tokens": completion_tokens
+                    if isinstance(completion_tokens, int)
+                    else None,
+                }
+        return Completion(text, usage)
 
     def stream(
         self, *, system: str, messages: list[ChatMessage], temperature: float = 0.4

@@ -35,6 +35,7 @@ from app.schemas import (
     SessionBase,
     SessionCreate,
     SessionDetailResponse,
+    UsageInfo,
 )
 from app.services.detect import detect_language
 from app.services.mentor import build_history, extract_json_dict, parse_feedback
@@ -129,6 +130,18 @@ def _misconception_out(m: Misconception | None) -> MisconceptionOut | None:
     return MisconceptionOut(type=m.type, description=m.description)
 
 
+def _to_usage_info(usage: dict | None) -> UsageInfo | None:
+    if not usage:
+        return None
+    try:
+        return UsageInfo(
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+        )
+    except Exception:
+        return None
+
+
 def _persist_assistant_turn(
     db: DbSession,
     session: DebugSession,
@@ -137,6 +150,7 @@ def _persist_assistant_turn(
     *,
     provider: str,
     is_hint: bool,
+    usage: dict | None = None,
 ) -> tuple[Message, Misconception | None]:
     session.understanding_score = feedback.understanding_score
     stored_misc: Misconception | None = None
@@ -161,6 +175,7 @@ def _persist_assistant_turn(
                 else None
             ),
             "hint": is_hint,
+            "usage": usage,
         },
     )
     db.add(message)
@@ -188,20 +203,26 @@ def _mentor_reply(
 ) -> tuple[MentorMessageResponse, str]:
     settings = request.app.state.settings
     try:
-        raw, provider = manager.complete(
+        completion, provider = manager.complete(
             system=system, messages=history, temperature=0.4
         )
     except LLMError as exc:
         raise llm_error_to_http(exc)
     try:
-        feedback = parse_feedback(raw)
+        feedback = parse_feedback(completion.text)
     except LLMError:
         raise HTTPException(
             status_code=502,
             detail="The mentor returned an unusable response. Try again.",
         )
     message, stored_misc = _persist_assistant_turn(
-        db, session, user, feedback, provider=provider, is_hint=is_hint
+        db,
+        session,
+        user,
+        feedback,
+        provider=provider,
+        is_hint=is_hint,
+        usage=completion.usage,
     )
     return (
         MentorMessageResponse(
@@ -212,6 +233,7 @@ def _mentor_reply(
             next_topics=feedback.next_topics,
             message_id=message.id,
             provider=provider,
+            usage=_to_usage_info(completion.usage),
         ),
         provider,
     )
@@ -428,29 +450,38 @@ def post_message_stream(
             yield _sse("error", {"detail": "The mentor returned an empty response."})
             return
         try:
-            meta_raw, _ = manager.complete(
+            meta_completion, _ = manager.complete(
                 system=meta_system_prompt(),
                 messages=history + [{"role": "assistant", "content": reply}],
                 temperature=0.0,
             )
-            feedback = parse_feedback(meta_raw)
+            feedback = parse_feedback(meta_completion.text)
             # The meta call only scores the turn; the visible reply is the
             # streamed text, never the meta placeholder.
             feedback.reply = reply
+            meta_usage = meta_completion.usage
         except LLMError:
             feedback = MentorFeedback(
                 reply=reply,
                 understanding_score=session.understanding_score,
                 next_topics=[],
             )
+            meta_usage = None
         try:
             message, stored_misc = _persist_assistant_turn(
-                db, session, user, feedback, provider=provider, is_hint=False
+                db,
+                session,
+                user,
+                feedback,
+                provider=provider,
+                is_hint=False,
+                usage=meta_usage,
             )
         except Exception:
             db.rollback()
             yield _sse("error", {"detail": "Could not save the mentor reply."})
             return
+        usage_info = _to_usage_info(meta_usage)
         yield _sse(
             "done",
             {
@@ -468,6 +499,7 @@ def post_message_stream(
                 "next_topics": feedback.next_topics,
                 "message_id": message.id,
                 "provider": provider,
+                "usage": usage_info.model_dump() if usage_info else None,
             },
         )
 
@@ -561,13 +593,13 @@ def submit_explanation(
     history = build_history(session.messages, settings.history_window)
     system = judge_system_prompt(language=session.language, code=session.code)
     try:
-        raw, provider = manager.complete(
+        completion, provider = manager.complete(
             system=system, messages=history, temperature=0.0
         )
     except LLMError as exc:
         raise llm_error_to_http(exc)
     try:
-        judged = ExplainFeedback.model_validate(extract_json_dict(raw))
+        judged = ExplainFeedback.model_validate(extract_json_dict(completion.text))
     except LLMError:
         raise HTTPException(
             status_code=502,
@@ -600,6 +632,7 @@ def submit_explanation(
                 "explanation_score": judged.score,
                 "passed": judged.passed,
                 "solve_check": True,
+                "usage": completion.usage,
             },
         )
     )
@@ -613,4 +646,5 @@ def submit_explanation(
         understanding_score=session.understanding_score,
         hints_left=_hints_left(settings, session),
         badges_earned=badges,
+        usage=_to_usage_info(completion.usage),
     )

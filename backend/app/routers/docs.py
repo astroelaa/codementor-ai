@@ -45,7 +45,7 @@ def simplify(
     manager: LLMManager = Depends(deps.get_llm_manager),
 ):
     try:
-        raw, _ = manager.complete(
+        completion, _ = manager.complete(
             system=simplify_system_prompt(language=payload.language.strip()),
             messages=[{"role": "user", "content": payload.text.strip()}],
             temperature=0.3,
@@ -53,7 +53,7 @@ def simplify(
     except LLMError as exc:
         raise llm_error_to_http(exc)
     try:
-        data = extract_json_dict(raw)
+        data = extract_json_dict(completion.text)
         feedback = _DocFeedback.model_validate(data)
     except (LLMError, Exception):
         raise HTTPException(

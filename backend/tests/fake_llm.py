@@ -2,6 +2,8 @@
 
 import json
 
+from app.llm.base import Completion
+
 MENTOR_JSON = json.dumps(
     {
         "reply": "What happens to len(numbers) when the list is empty?",
@@ -82,8 +84,8 @@ class FakeLLMManager:
             {"kind": "complete", "system_head": system[:60], "turns": len(messages)}
         )
         if self.complete_scripts:
-            return self.complete_scripts.pop(0), "fake"
-        return MENTOR_JSON, "fake"
+            return Completion(self.complete_scripts.pop(0), None), "fake"
+        return Completion(MENTOR_JSON, None), "fake"
 
     def stream(self, *, system, messages, temperature=0.4):
         self.calls.append(

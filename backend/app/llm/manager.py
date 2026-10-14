@@ -13,7 +13,7 @@ from typing import Iterator
 from app.config import Settings
 
 from .anthropic import AnthropicProvider
-from .base import BaseLLMProvider, ChatMessage
+from .base import BaseLLMProvider, ChatMessage, Completion
 from .errors import LLMError
 from .gemini import GeminiProvider
 from .groq_sdk import GroqSDKProvider
@@ -85,8 +85,8 @@ class LLMManager:
         system: str,
         messages: list[ChatMessage],
         temperature: float = 0.4,
-    ) -> tuple[str, str]:
-        """Return (text, provider_name), trying each provider in order."""
+    ) -> tuple[Completion, str]:
+        """Return (completion, provider_name), trying each provider in order."""
         failures: list[str] = []
         for provider in self.providers:
             try:

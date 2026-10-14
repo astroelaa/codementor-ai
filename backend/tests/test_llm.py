@@ -2,12 +2,20 @@
 
 import pytest
 
-from app.llm.anthropic import extract_anthropic_delta, extract_anthropic_text
+from app.llm.anthropic import (
+    extract_anthropic_delta,
+    extract_anthropic_text,
+    extract_anthropic_usage,
+)
 from app.llm.base import BaseLLMProvider
 from app.llm.errors import LLMError, sanitize
-from app.llm.gemini import extract_gemini_text
+from app.llm.gemini import extract_gemini_text, extract_gemini_usage
 from app.llm.manager import LLMManager
-from app.llm.openai_compat import extract_openai_delta, extract_openai_text
+from app.llm.openai_compat import (
+    extract_openai_delta,
+    extract_openai_text,
+    extract_openai_usage,
+)
 
 
 def test_openai_complete_parsing():
@@ -83,7 +91,9 @@ class _Succeed(BaseLLMProvider):
     name = "ok"
 
     def complete(self, *, system, messages, temperature=0.4):
-        return "done"
+        from app.llm.base import Completion
+
+        return Completion("done", {"prompt_tokens": 5, "completion_tokens": 2})
 
     def stream(self, *, system, messages, temperature=0.4):
         yield from ["a", "b"]
@@ -97,8 +107,9 @@ def _manager_with(providers):
 
 def test_manager_falls_back_on_complete():
     manager = _manager_with([_Failer("k", "m"), _Succeed("k", "m")])
-    text, name = manager.complete(system="s", messages=[])
-    assert (text, name) == ("done", "ok")
+    completion, name = manager.complete(system="s", messages=[])
+    assert (completion.text, name) == ("done", "ok")
+    assert completion.usage == {"prompt_tokens": 5, "completion_tokens": 2}
 
 
 def test_manager_falls_back_on_stream_before_first_chunk():
@@ -120,3 +131,19 @@ def test_manager_raises_when_nothing_configured():
     with pytest.raises(LLMError) as exc_info:
         manager.complete(system="s", messages=[])
     assert exc_info.value.kind == "config"
+
+
+def test_usage_extractors():
+    assert extract_openai_usage(
+        {"usage": {"prompt_tokens": 10, "completion_tokens": 4}}
+    ) == {"prompt_tokens": 10, "completion_tokens": 4}
+    assert extract_openai_usage({}) is None
+    assert extract_openai_usage({"usage": {"total_tokens": 14}}) is None
+    assert extract_anthropic_usage(
+        {"usage": {"input_tokens": 7, "output_tokens": 3}}
+    ) == {"prompt_tokens": 7, "completion_tokens": 3}
+    assert extract_anthropic_usage({}) is None
+    assert extract_gemini_usage(
+        {"usageMetadata": {"promptTokenCount": 9, "candidatesTokenCount": 5}}
+    ) == {"prompt_tokens": 9, "completion_tokens": 5}
+    assert extract_gemini_usage({}) is None

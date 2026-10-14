@@ -126,6 +126,12 @@ class MisconceptionOut(BaseModel):
     description: str
 
 
+# --- Token usage (measured only; never invented) ---------------------------
+class UsageInfo(BaseModel):
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+
+
 class ChatMessageResponse(BaseModel):
     id: str
     role: str
@@ -165,6 +171,7 @@ class MentorMessageResponse(BaseModel):
     next_topics: list[str] = Field(default_factory=list)
     message_id: str
     provider: str
+    usage: Optional[UsageInfo] = None
 
 
 class ExplainResponse(BaseModel):
@@ -175,6 +182,7 @@ class ExplainResponse(BaseModel):
     understanding_score: int
     hints_left: int
     badges_earned: list[BadgeResponse] = Field(default_factory=list)
+    usage: Optional[UsageInfo] = None
 
 
 class SnippetResponse(BaseModel):

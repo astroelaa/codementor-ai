@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Iterator
 
-from .base import BaseLLMProvider, ChatMessage
+from .base import BaseLLMProvider, ChatMessage, Completion
 from .errors import LLMError
 from .http import iter_sse_data, open_sse_stream, post_json
 
@@ -39,6 +39,21 @@ def extract_gemini_text(provider: str, payload: dict) -> str:
     if not text:
         raise LLMError(provider, "parse", "empty completion")
     return text
+
+
+def extract_gemini_usage(payload: dict) -> dict | None:
+    """Measured token counts from a Gemini response, else None."""
+    meta = payload.get("usageMetadata")
+    if not isinstance(meta, dict):
+        return None
+    prompt = meta.get("promptTokenCount")
+    completion = meta.get("candidatesTokenCount")
+    if not isinstance(prompt, int) and not isinstance(completion, int):
+        return None
+    return {
+        "prompt_tokens": prompt if isinstance(prompt, int) else None,
+        "completion_tokens": completion if isinstance(completion, int) else None,
+    }
 
 
 class GeminiProvider(BaseLLMProvider):
@@ -75,7 +90,7 @@ class GeminiProvider(BaseLLMProvider):
 
     def complete(
         self, *, system: str, messages: list[ChatMessage], temperature: float = 0.4
-    ) -> str:
+    ) -> Completion:
         data = post_json(
             self.name,
             self._url(False),
@@ -84,7 +99,10 @@ class GeminiProvider(BaseLLMProvider):
             timeout=self.timeout,
             secrets=(self.api_key,),
         )
-        return extract_gemini_text(self.name, data)
+        return Completion(
+            extract_gemini_text(self.name, data),
+            extract_gemini_usage(data),
+        )
 
     def stream(
         self, *, system: str, messages: list[ChatMessage], temperature: float = 0.4

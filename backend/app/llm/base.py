@@ -3,10 +3,24 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Iterator
 
 # {"role": "user" | "assistant", "content": str}
 ChatMessage = dict
+
+
+@dataclass
+class Completion:
+    """One model completion.
+
+    usage holds MEASURED token counts when the provider returns them
+    (prompt_tokens / completion_tokens); otherwise None. Counts are never
+    invented.
+    """
+
+    text: str
+    usage: dict | None = field(default=None)
 
 
 class BaseLLMProvider(ABC):
@@ -36,8 +50,8 @@ class BaseLLMProvider(ABC):
         system: str,
         messages: list[ChatMessage],
         temperature: float = 0.4,
-    ) -> str:
-        """One full completion, returned as plain text."""
+    ) -> Completion:
+        """One full completion: text plus measured usage when available."""
 
     @abstractmethod
     def stream(
