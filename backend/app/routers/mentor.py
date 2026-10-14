@@ -92,6 +92,7 @@ def _session_base(
     return SessionBase(
         id=session.id,
         language=session.language,
+        goal=session.goal,
         code=session.code,
         status=session.status,
         understanding_score=session.understanding_score,
@@ -261,6 +262,7 @@ def create_session(
         user_id=user.id if user else None,
         guest_token=guest_token,
         language=language,
+        goal=payload.goal,
         code=payload.code.strip(),
         status="active",
     )
@@ -355,6 +357,7 @@ def post_message(
         language=session.language,
         code=session.code,
         hints_left=_hints_left(settings, session),
+        goal=session.goal,
     )
     response, _ = _mentor_reply(
         db=db,
@@ -400,6 +403,7 @@ def post_message_stream(
         language=session.language,
         code=session.code,
         hints_left=_hints_left(settings, session),
+        goal=session.goal,
     )
 
     def event_stream():
@@ -509,6 +513,7 @@ def request_hint(
         language=session.language,
         code=session.code,
         hints_left=_hints_left(settings, session) - 1,
+        goal=session.goal,
     )
     response, _ = _mentor_reply(
         db=db,

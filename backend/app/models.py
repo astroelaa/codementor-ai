@@ -84,6 +84,7 @@ class Session(Base):
         String(36), nullable=True, index=True
     )
     language: Mapped[str] = mapped_column(String(32), default="python")
+    goal: Mapped[str] = mapped_column(String(20), default="debug")
     code: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active|solved
     understanding_score: Mapped[int] = mapped_column(Integer, default=0)

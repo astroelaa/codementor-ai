@@ -62,6 +62,7 @@ class SessionCreate(BaseModel):
         "auto",
     ] = "auto"
     code: str = Field(min_length=1, max_length=8000)
+    goal: Literal["debug", "review", "explain"] = "debug"
 
 
 class MessageCreate(BaseModel):
@@ -138,6 +139,7 @@ class ChatMessageResponse(BaseModel):
 class SessionBase(BaseModel):
     id: str
     language: str
+    goal: str = "debug"
     code: str
     status: str
     understanding_score: int

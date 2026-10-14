@@ -40,6 +40,17 @@ def test_chat_prompt_contains_code_and_grounding_rules():
     assert "Maximum 80 words" in prompt
 
 
+def test_goal_preamble_shapes_prompt():
+    from app.mentor_prompts import chat_system_prompt as chat
+
+    review = chat(language="python", code=PYTHON, hints_left=3, goal="review")
+    assert "REVIEW MODE" in review
+    explain = chat(language="python", code=PYTHON, hints_left=3, goal="explain")
+    assert "EXPLAIN MODE" in explain
+    debug = chat(language="python", code=PYTHON, hints_left=3)
+    assert "DEBUG MODE" in debug
+
+
 def test_hint_prompt_contains_code():
     prompt = hint_system_prompt(language="go", code=GO, hints_left=2)
     assert GO in prompt
@@ -60,6 +71,32 @@ def test_session_auto_detect_and_unknown(user_headers):
     )
     assert r.status_code == 422
     assert "explicitly" in r.json()["detail"]
+
+
+def test_session_goal_stored_and_validated(user_headers):
+    from tests.conftest import client
+
+    r = client.post(
+        "/api/sessions",
+        json={"language": "python", "code": "x = 1", "goal": "review"},
+        headers=user_headers,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["goal"] == "review"
+
+    r = client.post(
+        "/api/sessions",
+        json={"language": "python", "code": "x = 1"},
+        headers=user_headers,
+    )
+    assert r.json()["goal"] == "debug"
+
+    r = client.post(
+        "/api/sessions",
+        json={"language": "python", "code": "x = 1", "goal": "fix-it-all"},
+        headers=user_headers,
+    )
+    assert r.status_code == 422
 
 
 def test_snippets_cover_all_languages():

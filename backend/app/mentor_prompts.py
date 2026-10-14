@@ -20,6 +20,28 @@ MISCONCEPTION_TYPES = [
 
 _TYPE_LIST = ", ".join(f'"{t}"' for t in MISCONCEPTION_TYPES)
 
+GOAL_PREAMBLES = {
+    "debug": (
+        "DEBUG MODE: the student believes the code is broken. Diagnose the "
+        "failure, name one suspicious area, and ask one guiding question."
+    ),
+    "review": (
+        "REVIEW MODE: the student wants a code review. Identify bugs, "
+        "readability and maintainability issues, and best-practice violations. "
+        "Present at most three short findings, then ask ONE question about "
+        "the most important finding. Never rewrite the code."
+    ),
+    "explain": (
+        "EXPLAIN MODE: the student wants to understand how the code works. "
+        "Explain it briefly in plain language, then ask ONE comprehension "
+        "question that checks understanding. Never dump a lecture."
+    ),
+}
+
+
+def _goal_block(goal: str) -> str:
+    return GOAL_PREAMBLES.get(goal, GOAL_PREAMBLES["debug"])
+
 _SHARED_RULES = """\
 You are CodeMentor AI, a Socratic programming mentor helping a student debug
 {language} code. Your only job is to teach the student HOW TO THINK.
@@ -58,9 +80,13 @@ The student's current code:
 """
 
 
-def chat_system_prompt(*, language: str, code: str, hints_left: int) -> str:
+def chat_system_prompt(
+    *, language: str, code: str, hints_left: int, goal: str = "debug"
+) -> str:
     return (
-        _SHARED_RULES.format(
+        _goal_block(goal)
+        + "\n\n"
+        + _SHARED_RULES.format(
             language=language, hints_left=hints_left, types=_TYPE_LIST
         )
         + "\n\n"
@@ -78,9 +104,13 @@ def chat_system_prompt(*, language: str, code: str, hints_left: int) -> str:
     )
 
 
-def stream_system_prompt(*, language: str, code: str, hints_left: int) -> str:
+def stream_system_prompt(
+    *, language: str, code: str, hints_left: int, goal: str = "debug"
+) -> str:
     return (
-        _SHARED_RULES.format(
+        _goal_block(goal)
+        + "\n\n"
+        + _SHARED_RULES.format(
             language=language, hints_left=hints_left, types=_TYPE_LIST
         )
         + "\n\n"
@@ -106,9 +136,13 @@ def meta_system_prompt() -> str:
     )
 
 
-def hint_system_prompt(*, language: str, code: str, hints_left: int) -> str:
+def hint_system_prompt(
+    *, language: str, code: str, hints_left: int, goal: str = "debug"
+) -> str:
     return (
-        "You are CodeMentor AI, a Socratic programming mentor. The student "
+        _goal_block(goal)
+        + "\n\n"
+        + "You are CodeMentor AI, a Socratic programming mentor. The student "
         f"is debugging {language} code and explicitly asked for a hint "
         f"(hints remaining after this one: {hints_left}).\n\n"
         + STUDENT_CODE_BLOCK.format(code=code)
