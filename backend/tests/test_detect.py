@@ -110,6 +110,12 @@ def test_chat_prompt_contains_code_and_grounding_rules():
     assert "Maximum 80 words" in prompt
 
 
+def test_prompt_handles_greetings_without_verbatim_repeats():
+    prompt = chat_system_prompt(language="python", code=PYTHON, hints_left=3)
+    assert "no reasoning about the code" in prompt
+    assert "Never repeat a previous reply verbatim" in prompt
+
+
 def test_goal_preamble_shapes_prompt():
     from app.mentor_prompts import chat_system_prompt as chat
 

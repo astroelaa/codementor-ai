@@ -1,0 +1,319 @@
+# CodeMentor AI — Project Overview
+
+Comprehensive technical and product reference for the existing repository.
+Source of truth is the code itself; each claim is marked
+**VERIFIED** (executed), **IMPLEMENTED** (in code + tests, awaiting live proof),
+**PARTIAL**, **PLANNED**, or **BLOCKED**. No secrets appear in this document.
+
+Related docs: `docs/production-readiness.md` (audit),
+`docs/product-evolution-proposal.md` (roadmap),
+`docs/deployment-checklist.md` (account steps).
+
+## 1. Project overview
+
+**Purpose.** CodeMentor AI is a Socratic programming mentor: instead of
+handing out fixed code, it diagnoses bugs internally and teaches through one
+guiding question at a time, a 3-hint budget, misconception tracking, and an
+explanation check that closes a session only when the student explains the fix.
+
+**Users.** Beginner-to-intermediate developers learning to debug, plus guests
+evaluating the product (1 free session, no account).
+
+**Major capabilities (all VERIFIED locally).** Auth + guest mode; mentor
+sessions with goals (debug/review/explain); JSON + SSE-streamed turns; hints;
+explanation scoring; misconceptions, skills, streaks, badges; dashboard,
+history with replay/resume, doc simplifier, learning paths; projects with
+milestones/tasks and AI briefs; curated doc links; PWA shell.
+
+**Direction.** Grow into Learn/Build/Improve modes on the same architecture
+(see `docs/product-evolution-proposal.md`). Implemented: core mentor +
+projects + references. Planned: practice sessions, retrieval evaluation.
+
+## 2. Architecture
+
+- **Frontend** (`frontend/`, React 18 + TS + Vite + Tailwind v4, HashRouter):
+  static build on GitHub Pages under `/codementor-ai/`. Talks to the API via
+  `VITE_API_BASE_URL` (public config).
+- **Backend** (`backend/app/`, FastAPI + SQLAlchemy 2, sync): JWT auth, guest
+  tokens, Socratic endpoints, LLM manager, SQLite locally / Postgres via
+  `DATABASE_URL`.
+- **AI provider manager** (`app/llm/`): Groq (official SDK, VERIFIED live) →
+  Gemini → OpenAI → Anthropic fallback; a provider is tried only if its key
+  is configured. Structured JSON parsed + Pydantic-validated; failures map to
+  502/503, never leaking keys.
+- **Database**: 15 tables (users, sessions, messages, hints, misconceptions,
+  skills, skill_progress, learning_paths, path_items, badges, user_badges,
+  daily_activity, doc_simplifications, projects, milestones, project_tasks);
+  4 Alembic revisions; migrations run at deploy (`alembic upgrade head`).
+- **Progress tracking**: activity rows → streaks; misconceptions → skills;
+  solve events → badges; all computed from stored rows, never fabricated.
+- **PWA**: manifest + icons + service worker in `dist/`; API traffic is
+  `NetworkOnly`.
+- **Hosting**: Pages (live) + backend host pending (Render Blueprint or HF
+  Spaces Docker) + Neon Postgres pending.
+
+```mermaid
+flowchart LR
+    Browser["React app<br/>(GitHub Pages)"] -->|HTTPS + JWT<br/>or guest token| API["FastAPI<br/>(host pending)"]
+    API --> DB[("Neon Postgres<br/>(pending)")]
+    API --> LLM["LLM manager<br/>(fallback chain)"]
+    LLM --> G["Groq SDK<br/>(verified live)"]
+    LLM --> F["Gemini / OpenAI / Anthropic<br/>(adapters only)"]
+```
+
+## 3. Frontend guide
+
+**Pages/routes** (`frontend/src/pages/`, lazy-loaded in `main.tsx`):
+`/` Landing, `/app` Workspace, `/projects` Projects, `/dashboard` Dashboard,
+`/history` History + replay, `/docs` Simplifier + references, `/login`,
+`/signup`, `/privacy`, `/terms`. Unknown routes redirect home.
+
+**Components** (`frontend/src/components/`): Navbar (7 links, hamburger below
+1024px), Footer (4 columns), Logo (inline SVG), AnchorLink (hash-safe),
+CodeEditor (lazy CodeMirror), Reveal/Counter/Faq, Toast, TypingDots/skeletons.
+
+**State.** TanStack Query for server data (5-min stale, no refetch on focus);
+local `useState` for chat/drafts; `localStorage` for JWT (`cm_token`), guest
+token (`cm_guest`), theme (`cm-theme`). Auth context restores the session via
+`GET /api/auth/me`.
+
+**Design system** (`index.css`): near-black `#0A0A0F`, surface `#12121A`,
+violet `#7C5CFF`, thin borders; Inter UI, Times New Roman display/serif body,
+JetBrains Mono code; dark default + light theme; lucide icons, no emojis;
+reduced-motion support.
+
+## 4. Backend guide
+
+**Entry** (`app/main.py::create_app`): builds engine/session factory/LLM
+manager/rate limiter, validates production config (refuses dev JWT secret and
+non-Postgres DB), mounts CORS (explicit origins), RequestID middleware,
+exception handlers mapping everything to `{detail, code}`.
+
+**Routers** (`app/routers/`): `auth` (signup/login/me/update/delete),
+`mentor` (sessions, turns, SSE stream, hints, explain), `meta`
+(health/ready/snippets/languages/resources), `progress` (dashboard/skills/
+learning-path), `docs` (simplify/history), `projects` (+milestones/tasks/
+brief/next).
+
+**Services** (`app/services/`): `mentor.py` (history window 20, JSON
+extraction), `languages.py` (authoritative registry), `detect.py`
+(regex scoring), `snippets.py` (10 samples), `progress.py`
+(activity/streak/badges/skills).
+
+**Middleware/deps**: CORS allow-list, sliding-window per-IP rate limits
+(signup/login 10-min, mentor 30/min), `get_db`/`get_current_user`/
+`get_optional_user`/guest-token dependencies.
+
+**Validation**: Pydantic v2 everywhere — passwords ≥8 chars, code ≤8000,
+messages ≤4000, doc text ≤4000, titles ≤200, statuses as Literals, language
+ Literals, ownership checks on every nested resource.
+
+**Auth**: bcrypt hashes, PyJWT HS256, 7-day expiry, 401 on missing/invalid/
+expired tokens, password re-check on delete (cascades everything).
+
+**Logging/errors**: sanitized `LLMError` (keys redacted), generic 502/503 to
+clients, `X-Request-ID` echo, unhandled exceptions logged server-side only.
+
+## 5. API reference
+
+Base: backend origin. Auth: `Authorization: Bearer <jwt>` or
+`X-Guest-Token` where noted. All IMPLEMENTED (pytest-covered) except where
+marked.
+
+| Method + path | Auth | Purpose | Location |
+|---|---|---|---|
+| GET `/health` | no | liveness + provider names | `routers/meta.py` |
+| GET `/ready` | no | DB `SELECT 1` + provider names (no AI call) | `routers/meta.py` |
+| GET `/api/snippets[?language=]` | no | 10 buggy samples | `routers/meta.py` |
+| GET `/api/languages` | no | registry metadata | `routers/meta.py` |
+| GET `/api/resources[?language=]` | no | 12 curated doc links | `routers/meta.py` |
+| POST `/api/auth/signup` | no | create account (409 dup) | `routers/auth.py` |
+| POST `/api/auth/login` | no | JWT (401 wrong) | `routers/auth.py` |
+| GET/PATCH/DELETE `/api/auth/me` | JWT | profile / delete-all | `routers/auth.py` |
+| POST `/api/sessions` | optional | create (guests: 1 free; `language:auto` detected) | `routers/mentor.py` |
+| GET `/api/sessions` | JWT/guest | history list | `routers/mentor.py` |
+| GET `/api/sessions/{id}` | owner | full replay | `routers/mentor.py` |
+| POST `.../{id}/messages` | owner | Socratic turn (JSON) | `routers/mentor.py` |
+| POST `.../{id}/messages/stream` | owner | SSE `provider/token/done/error` | `routers/mentor.py` |
+| POST `.../{id}/hints` | owner | 1 of 3 hints (403 at 0) | `routers/mentor.py` |
+| POST `.../{id}/explain` | owner | judge explanation; solves | `routers/mentor.py` |
+| GET `/api/dashboard` | JWT | real stats/weak-spots/badges | `routers/progress.py` |
+| GET `/api/skills` | JWT | measured encounters/scores | `routers/progress.py` |
+| GET `/api/learning-path` | JWT | active path or `null` | `routers/progress.py` |
+| POST `/api/learning-path/regenerate` | JWT | rebuild from weak spots | `routers/progress.py` |
+| PATCH `/api/learning-path/items/{id}` | JWT | todo/doing/done | `routers/progress.py` |
+| POST `/api/docs/simplify` | JWT | explanation+example+question | `routers/docs.py` |
+| GET `/api/docs/history` | JWT | past simplifications | `routers/docs.py` |
+| POST `/api/projects` | JWT | create (+language check) | `routers/projects.py` |
+| GET `/api/projects` | JWT | list with counts | `routers/projects.py` |
+| GET/PATCH `/api/projects/{id}` | JWT owner | detail / update | `routers/projects.py` |
+| POST `/api/projects/{id}/brief` | JWT owner | AI brief → stores milestones/tasks | `routers/projects.py` |
+| POST `/api/projects/{id}/milestones` | JWT owner | add | `routers/projects.py` |
+| PATCH `/api/projects/milestones/{mid}` | JWT owner | update | `routers/projects.py` |
+| POST `/api/projects/milestones/{mid}/tasks` | JWT owner | add | `routers/projects.py` |
+| PATCH `/api/projects/tasks/{tid}` | JWT owner | update | `routers/projects.py` |
+| GET `/api/projects/{id}/next` | JWT owner | first open task + guidance | `routers/projects.py` |
+
+Proposed (PLANNED, not implemented): practice-session kind, retrieval
+endpoints, execution endpoints — none exist.
+
+## 6. AI mentor lifecycle
+
+1. UI sends code + language/goal (+optional `project_id`) → `POST /api/sessions`.
+2. Turn: user message stored → last-20 history built → system prompt assembled
+   (goal preamble + Socratic rules incl. greeting rule + language guidance +
+   full code block) → `LLMManager.complete` tries configured providers in order.
+3. Model must return strict JSON (`reply`, `understanding_score`,
+   `misconception?`, `next_topics`); parse/validation failure → HTTP 502.
+4. Streaming variant streams prose tokens, then runs a scoring call and emits
+   a final `done` event with the same structured payload.
+5. Assistant reply, score, misconception row, skill bump, activity row, and
+   measured token usage persist in one transaction; hints/explain follow the
+   same path with their own prompts. Solved sessions become read-only (409).
+
+## 7. Programming languages
+
+| Language | Detect | Highlight | Snippet | Prompt note | Docs links | Linters | Execution |
+|---|---|---|---|---|---|---|---|
+| Python/JS/TS/Java/C++/Go/SQL | yes | full | yes | yes | yes | no | no |
+| C, Rust | yes | full (C via C++ grammar) | yes | yes | yes | no | no |
+| C# | yes | **fallback (Java grammar)** | yes | yes (+note) | yes | no | no |
+| C/Rust/HTML-CSS | no | no | no | no | no | no | no |
+
+Gaps (honest): regex heuristics can tie on ambiguous input (returns
+`unknown`, UI asks explicitly); C# colors are approximate; no language runs
+code; no per-language test tooling. Detector lives in the registry; the
+frontend mirror is best-effort, backend authoritative.
+
+## 8. Database
+
+SQLite (`backend/codementor.db`) for local dev; Postgres via `DATABASE_URL`
+in production, refused otherwise at boot. SQLAlchemy 2, portable string-UUID
+keys. 15 tables (§2), FKs + indexes + unique constraints; cascades on user
+delete. Migrations: `64bf…` (schema+seeds), `f4c926f` (path source),
+`8f967aef` (session goal), `3445aae6` (projects/milestones/tasks +
+sessions.project_id, batch-mode FK for SQLite). Fresh DBs migrate cleanly
+(proven by the test suite, which upgrades scratch DBs). **Production
+Postgres: NOT TESTED** (Neon pending) — local + mocked coverage only.
+
+## 9. Projects and milestones
+
+Brief (objective/requirements/architecture) generated from a description and
+stored with created milestones/tasks; statuses cycle todo→doing→done;
+`/next` returns the first open task or `{done:true}`; sessions link via
+`project_id` (ownership-checked; guests rejected). Limits: 5 milestones ×
+5 tasks per brief; no project delete endpoint yet (account delete cascades);
+no cross-project task moves.
+
+## 10. AI providers
+
+Manager order: `LLM_PROVIDER` then `LLM_FALLBACKS` (`groq,gemini,openai,
+anthropic`); only keyed providers are tried; any failure tries the next;
+all-fail → 503. Defaults: `openai/gpt-oss-20b`, `gemini-2.0-flash`,
+`gpt-4o-mini`, `claude-3-5-haiku-20241022` (override via `LLM_MODEL` /
+`<NAME>_MODEL`). Timeouts 45s, `max_tokens` 700, no retries inside a
+provider (one attempt, then fallback). Usage recorded only when reported.
+**Tested live: Groq only.** Adapters for the other three are code-complete
+with parser unit tests but have never made a real call.
+
+## 11. Environment configuration
+
+Backend (`backend/.env`, git-ignored; see `backend/.env.example`):
+`ENVIRONMENT`, `DATABASE_URL` (secret in prod), `JWT_SECRET` (secret, ≥32 in
+prod), `ALLOWED_ORIGINS`, `LLM_PROVIDER`, `LLM_FALLBACKS`, `LLM_MODEL`,
+`LLM_API_KEY`, `GROQ/GEMINI/OPENAI/ANTHROPIC_API_KEY` (secrets),
+`GROQ/GEMINI/OPENAI/ANTHROPIC_MODEL`, `LLM_TIMEOUT_SECONDS`,
+`LLM_MAX_TOKENS`, `RATE_LIMIT_SIGNUP/LOGIN/MENTOR`, `MAX_HINTS_PER_SESSION`,
+`HISTORY_WINDOW`, `MAX_SESSION_MESSAGES`. Frontend (`frontend/.env`,
+optional): `VITE_API_BASE_URL` — **public** config, also settable as a repo
+Variable for Pages builds.
+
+## 12. Deployment
+
+- Frontend: Pages via `.github/workflows/pages.yml` (Node 22, `npm ci`,
+  `tsc+vite build`, `dist/` artifact, base `/codementor-ai/`, HashRouter).
+  Live and verified.
+- Backend: `render.yaml` Blueprint (rootDir `backend`, pip install,
+  `alembic upgrade head && uvicorn … $PORT`, `/health`) or
+  `backend/Dockerfile` (`${PORT:-7860}`) for HF Spaces. Not yet deployed.
+- DB: Neon free Postgres + `postgresql+psycopg2://` URL; migrations run at
+  container start (single-instance safe).
+- CORS: exact allow-list; production needs `https://astroelaa.github.io`.
+- CI (`.github/workflows/ci.yml`): backend pytest + frontend build — green.
+- Remaining account steps: `docs/deployment-checklist.md` blocker table.
+
+## 13. Testing
+
+- Backend: `python -m pytest -q` from `backend/` — **73 passed** (auth,
+  guest caps, mentor/stream/hints/explain, ownership isolation, dashboard,
+  docs, projects, detection, prompts, usage extractors, ops, no-leak).
+  Scratch migrated SQLite DBs; fake LLM (no network). Latest full run green.
+- Frontend: `npm run build` (`tsc --noEmit` + Vite + PWA) — **exit 0**.
+  No unit-test runner; browser-verified flows: signup/login, diagnose,
+  streaming, hints, solve, resume-after-refresh, project create, dashboard
+  data, history replay, theme toggle — zero console errors.
+- Live provider tests (Groq, throwaway accounts): Socratic turn, Rust turn
+  with measured usage, docs simplify — all HTTP 200 with grounded replies.
+- Integration: CI runs both suites per push; Pages deploy verified live.
+
+## 14. Security
+
+Bcrypt passwords; HS256 JWT 7-day expiry; Bearer or guest-token auth;
+per-resource ownership checks (sessions, projects, milestones, tasks, paths,
+docs); guest project-linking rejected; rate limits on signup/login/AI writes;
+size caps on every free-text field; CORS allow-list (no `*`); keys only in
+server env/headers, redacted from errors, absent from git (scanned per
+commit); `X-Request-ID` for failure correlation. Limitations: JWT in
+`localStorage` (XSS trade-off for static hosting; short-ish expiry, logout
+clears); in-memory rate limiter (single-instance correct); no WAF/bot
+protection beyond provider edges.
+
+## 15. PWA
+
+`manifest.webmanifest` (CodeMentor AI, standalone, scope/start
+`/codementor-ai/`), generated 192/512/maskable icons, `sw.js` via
+vite-plugin-pwa (`prompt` updates with reload banner; offline-ready toast).
+Workbox precaches the shell; `/api/*` is `NetworkOnly` — no tokens or
+conversations cached; fonts cached 30 days. VERIFIED: manifest/SW/icons
+served, SW registered with correct scope, zero errors. NOT TESTED: real
+airplane-mode install/update flow (needs a device). AI mentoring honestly
+requires a connection (stated in UI).
+
+## 16. Current blockers and risks
+
+- Neon provisioning + backend host deploy + `VITE_API_BASE_URL` + key
+  rotation: all pending account actions (checklist in §12 docs).
+- Chat-exposed Groq key + tokens: rotate/delete after deploy works.
+- Groq model IDs rot without notice (caused one 404 already); re-check on
+  any provider 4xx. No fallback provider live-tested yet.
+- Free tiers sleep (cold starts) and cap usage; rate limits are per-process.
+- `let mut`-style detector collisions are fixed case-by-case, not solved
+  generally (regex heuristics, documented).
+
+## 17. Roadmap
+
+Priorities: language registry extras (done: C/Rust) → mentor depth (done:
+guidance + greeting rule) → projects (done) → references (done: link
+catalog). Still evaluation-only: RAG/vector search, LangGraph/agents, new
+providers, code execution (Judge0), GitHub repo integration, practice
+sessions. Do not treat any of these as implemented.
+
+## 18. New developer setup
+
+```bash
+# backend
+cd backend && python -m venv .venv && .venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env   # then set GROQ_API_KEY inside backend/.env
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000   # docs at /docs, health at /health
+python -m pytest -q                          # 73 tests, fake LLM, no network
+# frontend (new terminal)
+cd frontend && npm install && npm run dev    # http://127.0.0.1:5173/
+npm run build                                # typecheck + production bundle
+```
+
+Common errors: port in use (stop the old process); `alembic ... not up to
+date` (run `alembic upgrade head` on the dev DB after pulling migrations);
+`POST /api/sessions → 503` (no provider key configured); guest 403 (device
+already used its free session — sign up).
