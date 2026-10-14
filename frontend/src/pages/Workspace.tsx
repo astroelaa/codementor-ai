@@ -24,6 +24,7 @@ import { CodeEditor } from "../components/CodeEditor";
 import { EmptyState } from "../components/bits";
 import { TypingDots } from "../components/bits";
 import { Reveal } from "../components/Reveal";
+import { VerifyBanner } from "../components/VerifyBanner";
 import { LANGUAGES, guessLanguage } from "../lib/detect";
 import {
   ApiError,
@@ -403,6 +404,8 @@ export function Workspace() {
           </div>
         </div>
       </Reveal>
+
+      <VerifyBanner />
 
       {!user && inSession && !guestCapped && (
         <Reveal delay={0.05}>

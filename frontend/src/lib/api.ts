@@ -169,6 +169,24 @@ export interface ResourceLink {
   url: string;
   license: string;
 }
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  read: boolean;
+  created_at: string;
+}
+export interface MemoryData {
+  weak_spots: { type: string; count: number }[];
+  misconceptions: {
+    id: string;
+    type: string;
+    description: string;
+    session_id: string | null;
+    created_at: string;
+  }[];
+}
 export interface MentorTurn {
   reply: string;
   understanding_score: number;
@@ -203,6 +221,9 @@ export interface User {
   email: string;
   display_name: string;
   theme: string;
+  is_verified: boolean;
+  notify_security_emails: boolean;
+  notify_progress_emails: boolean;
   created_at: string;
 }
 
@@ -272,6 +293,29 @@ export const api = {
     return request<void>("/api/auth/me", {
       method: "DELETE",
       body: JSON.stringify({ password }),
+    });
+  },
+  resendVerification(): Promise<{ message: string }> {
+    return request<{ message: string }>("/api/auth/resend-verification", {
+      method: "POST",
+    });
+  },
+  verifyEmail(token: string): Promise<{ message: string }> {
+    return request<{ message: string }>("/api/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
+  },
+  forgotPassword(email: string): Promise<{ message: string }> {
+    return request<{ message: string }>("/api/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+  resetPassword(token: string, new_password: string): Promise<{ message: string }> {
+    return request<{ message: string }>("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password }),
     });
   },
 
@@ -390,6 +434,32 @@ export const api = {
   },
   nextTask(id: string): Promise<NextTask> {
     return request<NextTask>(`/api/projects/${id}/next`);
+  },
+  notifications(): Promise<Notification[]> {
+    return request<Notification[]>("/api/notifications");
+  },
+  unreadCount(): Promise<{ count: number }> {
+    return request<{ count: number }>("/api/notifications/unread-count");
+  },
+  markNotificationRead(id: string): Promise<Notification> {
+    return request<Notification>(`/api/notifications/${id}/read`, { method: "PATCH" });
+  },
+  markAllNotificationsRead(): Promise<{ updated: number }> {
+    return request<{ updated: number }>("/api/notifications/read-all", { method: "POST" });
+  },
+  readMemory(): Promise<MemoryData> {
+    return request<MemoryData>("/api/memory");
+  },
+  deleteMisconception(id: string): Promise<{ deleted: string }> {
+    return request<{ deleted: string }>(`/api/memory/misconceptions/${id}`, {
+      method: "DELETE",
+    });
+  },
+  updatePreferences(patch: { notify_security_emails?: boolean; notify_progress_emails?: boolean }): Promise<User> {
+    return request<User>("/api/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
   },
   health(): Promise<{ status: string; providers_configured: string[] }> {
     return request("/health");

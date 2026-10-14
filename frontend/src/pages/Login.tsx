@@ -79,6 +79,9 @@ export function Login() {
             No account yet?{" "}
             <Link to="/signup" className="font-semibold text-(--accent-text)">Sign up free</Link>
           </p>
+          <p className="mt-2 text-center text-sm text-(--muted)">
+            <Link to="/forgot" className="font-semibold text-(--accent-text)">Forgot password?</Link>
+          </p>
         </div>
       </Reveal>
     </main>

@@ -9,12 +9,14 @@ import {
   Layers,
   RefreshCw,
   Target,
+  Trash2,
 } from "lucide-react";
 import { ApiError, api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useToast } from "../lib/toast";
 import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/bits";
+import { VerifyBanner } from "../components/VerifyBanner";
 
 const BADGE_ICONS: Record<string, typeof Award> = {
   flag: Award,
@@ -26,7 +28,7 @@ const BADGE_ICONS: Record<string, typeof Award> = {
 };
 
 export function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, refresh } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -45,9 +47,14 @@ export function Dashboard() {
     enabled: !!user,
     retry: 1,
   });
+  const memory = useQuery({
+    queryKey: ["memory"],
+    queryFn: api.readMemory,
+    enabled: !!user,
+    retry: 1,
+  });
 
-  const regen = useMutation({
-    mutationFn: api.regeneratePath,
+  const regen = useMutation({    mutationFn: api.regeneratePath,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["learning-path"] });
       toast("success", "Learning path regenerated from your weak spots.");
@@ -64,6 +71,26 @@ export function Dashboard() {
     },
     onError: (e) =>
       toast("error", e instanceof ApiError ? e.message : "Could not delete."),
+  });
+  const forget = useMutation({
+    mutationFn: (id: string) => api.deleteMisconception(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["memory"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast("success", "Memory entry deleted.");
+    },
+    onError: (e) =>
+      toast("error", e instanceof ApiError ? e.message : "Could not delete."),
+  });
+  const prefs = useMutation({
+    mutationFn: (patch: { notify_security_emails?: boolean; notify_progress_emails?: boolean }) =>
+      api.updatePreferences(patch),
+    onSuccess: () => {
+      void refresh();
+      toast("success", "Email preferences saved.");
+    },
+    onError: (e) =>
+      toast("error", e instanceof ApiError ? e.message : "Could not save."),
   });
   const setItem = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
@@ -127,6 +154,7 @@ export function Dashboard() {
         <p className="eyebrow">Dashboard</p>
         <h1 className="h2-serif mt-2 text-3xl md:text-4xl">Your progress</h1>
       </Reveal>
+      <VerifyBanner />
 
       {isNew ? (
         <Reveal delay={0.05}>
@@ -222,6 +250,45 @@ export function Dashboard() {
 
           <Reveal delay={0.08}>
             <div className="card mt-5 p-6">
+              <h2 className="font-bold">Learning memory</h2>
+              <p className="mt-0.5 text-[13px] text-(--muted)">
+                What the mentor remembers about your mistakes. Delete anything
+                you don't want kept — counters stay cumulative.
+              </p>
+              {!memory.data || memory.data.misconceptions.length === 0 ? (
+                <p className="mt-4 text-sm text-(--muted)">
+                  {memory.isPending ? "Loading…" : "No stored misconceptions yet."}
+                </p>
+              ) : (
+                <ul className="mt-4 flex flex-col gap-2">
+                  {memory.data.misconceptions.map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-start gap-2.5 rounded-xl border border-(--border) bg-(--bg-soft) px-3 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono text-[13px] font-semibold">{m.type}</p>
+                        <p className="text-[13px] text-(--muted)">{m.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => forget.mutate(m.id)}
+                        disabled={forget.isPending}
+                        aria-label={`Delete memory: ${m.type}`}
+                        title="Delete this memory"
+                        className="grid size-7 shrink-0 place-items-center rounded-lg border border-(--border) text-(--muted) transition-colors hover:border-(--danger) hover:text-(--danger)"
+                      >
+                        <Trash2 size={14} strokeWidth={1.5} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.08}>
+            <div className="card mt-5 p-6">
               <div className="flex flex-wrap items-center gap-3">
                 <div>
                   <h2 className="font-bold">Learning path</h2>
@@ -307,7 +374,35 @@ export function Dashboard() {
               <p className="mt-1 text-sm text-(--muted)">
                 Signed in as <span className="font-semibold text-(--text)">{user.email}</span>
                 {user.display_name ? ` (${user.display_name})` : ""}.
+                {user.is_verified ? " Email verified." : " Email not verified yet."}
               </p>
+              <div className="mt-4 flex flex-col gap-2.5 border-t border-(--border) pt-4">
+                <p className="label">Email preferences</p>
+                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 accent-[#7C5CFF]"
+                    checked={user.notify_security_emails}
+                    onChange={(e) => prefs.mutate({ notify_security_emails: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-semibold">Security emails</span>
+                    <span className="block text-[13px] text-(--muted)">Password changes and important account notices. Recommended on.</span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 accent-[#7C5CFF]"
+                    checked={user.notify_progress_emails}
+                    onChange={(e) => prefs.mutate({ notify_progress_emails: e.target.checked })}
+                  />
+                  <span>
+                    <span className="font-semibold">Progress emails</span>
+                    <span className="block text-[13px] text-(--muted)">A note when you solve a session. Off by default — no spam, ever.</span>
+                  </span>
+                </label>
+              </div>
               {!showDelete ? (
                 <button
                   type="button"

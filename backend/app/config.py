@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_days: int = 7
 
+    # --- Email (transactional only: verification + password reset) ---------
+    # console: prints recipient + subject to stdout (dev). smtp: real
+    # delivery via stdlib smtplib (no new dependencies).
+    email_provider: str = "console"
+    email_sender: str = "CodeMentor AI <noreply@example.com>"
+    email_smtp_host: str = ""
+    email_smtp_port: int = 587
+    email_smtp_user: str = ""
+    email_smtp_password: str = ""
+    frontend_url: str = "https://astroelaa.github.io/codementor-ai"
+
     # Comma-separated browser origins allowed to call this API.
     allowed_origins: str = (
         "http://localhost:5173,http://127.0.0.1:5173,"

@@ -13,7 +13,7 @@ from app.database import build_engine, build_session_factory
 from app.errors import http_exception_handler, unhandled_exception_handler
 from app.llm.manager import LLMManager
 from app.rate_limit import RateLimiter
-from app.routers import auth, docs, mentor, meta, progress, projects
+from app.routers import auth, docs, memory, mentor, meta, notifications, progress, projects
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -63,6 +63,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(progress.router)
     app.include_router(docs.router)
     app.include_router(projects.router)
+    app.include_router(notifications.router)
+    app.include_router(memory.router)
 
     @app.get("/")
     def root():

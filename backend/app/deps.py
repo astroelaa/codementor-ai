@@ -1,6 +1,7 @@
 """Request dependencies: database session, LLM manager, auth."""
 
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session as DbSession
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session as DbSession
 from app.config import Settings
 from app.llm.manager import LLMManager
 from app.models import User
-from app.security import decode_token_subject
+from app.security import decode_token
 
 GUEST_TOKEN_HEADER = "X-Guest-Token"
 
@@ -47,7 +48,7 @@ def get_optional_user(
         return None
     settings: Settings = request.app.state.settings
     try:
-        subject = decode_token_subject(
+        payload = decode_token(
             auth[7:].strip(),
             secret=settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
@@ -58,10 +59,15 @@ def get_optional_user(
         )
     user = (
         db.query(User)
-        .filter(User.id == subject, User.is_active == True)  # noqa: E712
+        .filter(User.id == payload["sub"], User.is_active == True)  # noqa: E712
         .first()
     )
     if user is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.")
+    # Server-side revocation (e.g. after a password reset): only the current
+    # token version is accepted. Integer comparison — no clock resolution
+    # issues. Tokens issued before versioning default to version 0.
+    if int(payload.get("ver", 0)) != (user.token_version or 0):
         raise HTTPException(status_code=401, detail="Invalid or expired token.")
     return user
 

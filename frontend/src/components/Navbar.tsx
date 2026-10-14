@@ -1,8 +1,10 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { LogOut, Menu, Moon, Sun, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bell, CheckCheck, LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import { AnchorLink } from "./AnchorLink";
 import { Logo } from "./Logo";
+import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/theme";
 
@@ -21,7 +23,43 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const [open, setOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const unread = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: api.unreadCount,
+    enabled: !!user,
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const notes = useQuery({
+    queryKey: ["notifications"],
+    queryFn: api.notifications,
+    enabled: !!user && bellOpen,
+    staleTime: 30_000,
+    retry: 1,
+  });
+  const unreadN = unread.data?.count ?? 0;
+
+  async function openBell() {
+    const next = !bellOpen;
+    setBellOpen(next);
+    if (next) void notes.refetch();
+  }
+
+  async function readOne(id: string) {
+    await api.markNotificationRead(id);
+    void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+  }
+
+  async function readAll() {
+    await api.markAllNotificationsRead();
+    void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+  }
 
   return (
     <header className="glass sticky top-0 z-50 border-b border-(--border)">
@@ -61,6 +99,49 @@ export function Navbar() {
           </button>
           {user ? (
             <>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => void openBell()}
+                  aria-label={unreadN > 0 ? `${unreadN} unread notifications` : "Notifications"}
+                  aria-expanded={bellOpen}
+                  className="relative grid size-9 place-items-center rounded-[10px] border border-(--border) text-(--muted) transition-colors hover:text-(--text)"
+                >
+                  <Bell size={17} strokeWidth={1.5} />
+                  {unreadN > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-(--accent) px-1 text-[10px] font-bold text-white">
+                      {unreadN > 9 ? "9+" : unreadN}
+                    </span>
+                  )}
+                </button>
+                {bellOpen && (
+                  <div className="card absolute right-0 top-11 z-[90] max-h-80 w-80 overflow-y-auto p-2" role="dialog" aria-label="Notifications">
+                    <div className="flex items-center justify-between px-2 py-1.5">
+                      <span className="text-[13px] font-bold">Notifications</span>
+                      <button type="button" onClick={() => void readAll()} className="flex items-center gap-1 text-xs font-semibold text-(--muted) hover:text-(--text)">
+                        <CheckCheck size={13} strokeWidth={1.5} /> Mark all read
+                      </button>
+                    </div>
+                    {(notes.data ?? []).length === 0 ? (
+                      <p className="px-2 py-4 text-center text-[13px] text-(--muted)">
+                        {notes.isPending ? "Loading…" : "All caught up."}
+                      </p>
+                    ) : (
+                      (notes.data ?? []).slice(0, 8).map((n) => (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={() => void readOne(n.id)}
+                          className={`block w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-(--surface-2) ${n.read ? "opacity-60" : ""}`}
+                        >
+                          <span className="block text-[13px] font-semibold">{n.title}</span>
+                          {n.body && <span className="block text-xs text-(--muted)">{n.body}</span>}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               <span className="hidden max-w-36 truncate text-sm text-(--muted) sm:block">
                 {user.display_name || user.email}
               </span>

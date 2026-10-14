@@ -9,10 +9,15 @@ frontend build green). Severity: HIGH / MED / LOW / NOTE.
 - JWT: HS256, `sub` + `iat`/`exp`, 7-day expiry, dev secret refused at boot
   in production. Invalid/expired tokens → 401 (tested). **OK.**
 - **MED — no server-side token revocation.** Logout only deletes the client
-  token; a stolen token stays valid up to 7 days. Fix planned: `token_valid_after`
-  on the user row, enforced at auth, bumped on password reset.
-- Email verification: **MISSING** (no columns, no endpoints). Planned Phase 2.
-- Password recovery: **MISSING**. Planned Phase 2 with revocation above.
+  token; a stolen token stays valid up to 7 days. **FIXED:** `token_version`
+  counter on the user row (JWT carries `ver`; only the current version is
+  accepted; password reset bumps the version). Integer comparison avoids the
+  clock-resolution race that timestamps would introduce (proven by test).
+- Email verification: **IMPLEMENTED** (hashed single-use tokens, 24h TTL,
+  resend capped 3/hour, `#/verify?token=` + resend UI, unverified keep full
+  access with banner — no lockouts).
+- Password recovery: **IMPLEMENTED** (generic responses, 1h single-use
+  tokens, old sessions revoked, `#/forgot` + `#/reset` pages).
 - Guest caps enforced server-side; ownership checks on all nested resources
   (tested, incl. cross-user 404s). **OK.**
 - Login/signup rate-limited (10/min/IP); login error is generic, but signup
@@ -48,12 +53,12 @@ frontend build green). Severity: HIGH / MED / LOW / NOTE.
   cached); update prompt + offline notice in UI. Device install test pending.
 - No frontend unit-test runner (build + tsc + browser checks instead).
 
-## 4. Gaps being implemented next (in order)
+## 4. Implemented this session (all tested)
 
 1. Email verification (hashed single-use tokens, resend limits, link compatible
    with `#/verify?token=`), unverified users keep full access + banner (no lockouts).
 2. Password reset (hashed single-use tokens, generic responses, session
-   invalidation via `token_valid_after`).
+   invalidation via `token_version` counter).
 3. SMTP/console email abstraction; all secrets server-side.
 4. Persistent notifications (DB table, ownership, unread count, preferences).
 5. Memory: session recap + project context injection + inspectable endpoint.

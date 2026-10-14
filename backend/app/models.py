@@ -44,6 +44,10 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(120), default="")
     theme: Mapped[str] = mapped_column(String(20), default="dark")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
+    notify_security_emails: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_progress_emails: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now
     )
@@ -70,6 +74,12 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     projects: Mapped[list["Project"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    auth_tokens: Mapped[list["AuthToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    notifications: Mapped[list["Notification"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -313,6 +323,32 @@ class Badge(Base):
     icon: Mapped[str] = mapped_column(String(64), default="award")
 
 
+class AuthToken(Base):
+    """Single-use auth tokens: email verification and password resets.
+
+    Only the SHA-256 hash is stored — the raw token is shown once (in the
+    email link) and never persisted, logged, or returned by any endpoint.
+    """
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), index=True
+    )
+    purpose: Mapped[str] = mapped_column(String(32), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now
+    )
+
+    user: Mapped[User] = relationship(back_populates="auth_tokens")
+
+
 class UserBadge(Base):
     __tablename__ = "user_badges"
     __table_args__ = (UniqueConstraint("user_id", "badge_id", name="uq_user_badge"),)
@@ -362,3 +398,28 @@ class DocSimplification(Base):
     )
 
     user: Mapped[Optional[User]] = relationship(back_populates="doc_simplifications")
+
+
+class Notification(Base):
+    """Persistent in-app notifications, one recipient each.
+
+    Created once per meaningful event (signup, badge, solve) inside the same
+    transaction as the event, so retries cannot duplicate them. Retention is
+    capped per user (see services.notifications).
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id"), index=True
+    )
+    type: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text, default="")
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now
+    )
+
+    user: Mapped[User] = relationship(back_populates="notifications")

@@ -27,11 +27,31 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class EmailRequest(BaseModel):
+    email: EmailStr
+
+
+class TokenBody(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
     display_name: str
     theme: str
+    is_verified: bool = False
+    notify_security_emails: bool = True
+    notify_progress_emails: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -40,6 +60,8 @@ class UserResponse(BaseModel):
 class UpdateProfileRequest(BaseModel):
     display_name: Optional[str] = Field(default=None, max_length=120)
     theme: Optional[str] = Field(default=None, pattern="^(dark|light)$")
+    notify_security_emails: Optional[bool] = None
+    notify_progress_emails: Optional[bool] = None
 
 
 # --- Mentor ---------------------------------------------------------------
@@ -330,6 +352,17 @@ class NextTaskResponse(BaseModel):
     guidance: str = ""
 
 
+class NotificationResponse(BaseModel):
+    id: str
+    type: str
+    title: str
+    body: str
+    read: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # --- Dashboard / learning ---------------------------------------------------
 class SessionSummary(BaseModel):
     id: str
@@ -366,6 +399,22 @@ class SkillProgressResponse(BaseModel):
     name: str
     encounters: int
     score: int
+
+
+# --- Inspectable memory -------------------------------------------------------
+class MemoryMisconception(BaseModel):
+    id: str
+    type: str
+    description: str
+    session_id: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MemoryResponse(BaseModel):
+    weak_spots: list[WeakSpot] = Field(default_factory=list)
+    misconceptions: list[MemoryMisconception] = Field(default_factory=list)
 
 
 class PathItemResponse(BaseModel):

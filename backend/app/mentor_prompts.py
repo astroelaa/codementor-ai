@@ -101,8 +101,14 @@ def _language_block(language: str) -> str:
 
 
 def chat_system_prompt(
-    *, language: str, code: str, hints_left: int, goal: str = "debug"
+    *, language: str, code: str, hints_left: int, goal: str = "debug",
+    recap: str = "", project_context: str = "",
 ) -> str:
+    extra = ""
+    if recap.strip():
+        extra += "\n\n" + recap.strip()
+    if project_context.strip():
+        extra += "\n\n" + project_context.strip()
     return (
         _goal_block(goal)
         + "\n\n"
@@ -113,6 +119,7 @@ def chat_system_prompt(
         + STUDENT_CODE_BLOCK.format(code=code)
         + "\n\n"
         + _language_block(language)
+        + extra
         + "\n\nOUTPUT FORMAT (strict): reply with ONLY one valid JSON object, "
         + "no prose before or after it:\n"
         + '{\n  "reply": "your message ending with one question",\n'
@@ -127,8 +134,14 @@ def chat_system_prompt(
 
 
 def stream_system_prompt(
-    *, language: str, code: str, hints_left: int, goal: str = "debug"
+    *, language: str, code: str, hints_left: int, goal: str = "debug",
+    recap: str = "", project_context: str = "",
 ) -> str:
+    extra = ""
+    if recap.strip():
+        extra += "\n\n" + recap.strip()
+    if project_context.strip():
+        extra += "\n\n" + project_context.strip()
     return (
         _goal_block(goal)
         + "\n\n"
@@ -139,6 +152,7 @@ def stream_system_prompt(
         + STUDENT_CODE_BLOCK.format(code=code)
         + "\n\n"
         + _language_block(language)
+        + extra
         + "\n\nOUTPUT FORMAT (strict): plain text only. No JSON, no markdown "
         + "headers, no code blocks. End with exactly one question."
     )
@@ -161,8 +175,14 @@ def meta_system_prompt() -> str:
 
 
 def hint_system_prompt(
-    *, language: str, code: str, hints_left: int, goal: str = "debug"
+    *, language: str, code: str, hints_left: int, goal: str = "debug",
+    recap: str = "", project_context: str = "",
 ) -> str:
+    extra = ""
+    if recap.strip():
+        extra += "\n\n" + recap.strip()
+    if project_context.strip():
+        extra += "\n\n" + project_context.strip()
     return (
         _goal_block(goal)
         + "\n\n"

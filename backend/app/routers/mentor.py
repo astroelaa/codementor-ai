@@ -38,6 +38,8 @@ from app.schemas import (
     UsageInfo,
 )
 from app.services.detect import detect_language
+from app.services.email import EmailBackend, get_email_backend, solve_congrats_email
+from app.services.memory import build_project_context, build_session_recap
 from app.services.mentor import build_history, extract_json_dict, parse_feedback
 from app.services.progress import (
     award_badge,
@@ -123,6 +125,15 @@ def _session_detail(
             ChatMessageResponse.model_validate(m) for m in session.messages
         ],
     )
+
+
+def _memory_context(
+    db: DbSession, session: DebugSession
+) -> tuple[str, str]:
+    """Recap + linked-project context actually sent to the model."""
+    recap = build_session_recap(session, len(session.messages))
+    project_context = build_project_context(db, session)
+    return recap, project_context
 
 
 def _misconception_out(m: Misconception | None) -> MisconceptionOut | None:
@@ -390,11 +401,14 @@ def post_message(
     )
     db.commit()
     history = build_history(session.messages, settings.history_window)
+    recap, project_context = _memory_context(db, session)
     system = chat_system_prompt(
         language=session.language,
         code=session.code,
         hints_left=_hints_left(settings, session),
         goal=session.goal,
+        recap=recap,
+        project_context=project_context,
     )
     response, _ = _mentor_reply(
         db=db,
@@ -436,11 +450,14 @@ def post_message_stream(
     )
     db.commit()
     history = build_history(session.messages, settings.history_window)
+    recap, project_context = _memory_context(db, session)
     system = stream_system_prompt(
         language=session.language,
         code=session.code,
         hints_left=_hints_left(settings, session),
         goal=session.goal,
+        recap=recap,
+        project_context=project_context,
     )
 
     def event_stream():
@@ -556,11 +573,14 @@ def request_hint(
     )
     db.commit()
     history = build_history(session.messages, settings.history_window)
+    recap, project_context = _memory_context(db, session)
     system = hint_system_prompt(
         language=session.language,
         code=session.code,
         hints_left=_hints_left(settings, session) - 1,
         goal=session.goal,
+        recap=recap,
+        project_context=project_context,
     )
     response, _ = _mentor_reply(
         db=db,
@@ -591,6 +611,7 @@ def submit_explanation(
     db: DbSession = Depends(deps.get_db),
     user: User | None = Depends(deps.get_optional_user),
     manager: LLMManager = Depends(deps.get_llm_manager),
+    mailer: EmailBackend = Depends(get_email_backend),
 ):
     settings = request.app.state.settings
     session = _load_session(
@@ -633,9 +654,27 @@ def submit_explanation(
             session.understanding_score, judged.score
         )
         if user is not None:
+            from app.services.notifications import notify
+
             record_activity(db, user.id, messages=1)
             earned = award_on_solve(db, user, session)
             badges = [BadgeResponse.model_validate(b) for b in earned]
+            notify(
+                db,
+                user.id,
+                "solve",
+                "Session solved",
+                f"You explained the fix in your own words (score {judged.score}).",
+            )
+            if user.notify_progress_emails:
+                try:
+                    mailer.send(
+                        solve_congrats_email(
+                            user.email, session.language, judged.score
+                        )
+                    )
+                except Exception:
+                    pass  # email is best-effort; the solve already persisted
 
     db.add(
         Message(

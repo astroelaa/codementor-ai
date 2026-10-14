@@ -234,6 +234,10 @@ def award_on_solve(
         badge = award_badge(db, user.id, "polyglot")
         if badge:
             earned.append(badge)
+    from app.services.notifications import notify
+
+    for badge in earned:
+        notify(db, user.id, "badge", f"Badge earned: {badge.name}", badge.description)
     for misconception in (
         db.query(Misconception)
         .filter(Misconception.session_id == session.id)

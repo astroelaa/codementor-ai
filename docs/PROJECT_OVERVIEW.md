@@ -127,8 +127,12 @@ marked.
 | GET `/api/snippets[?language=]` | no | 10 buggy samples | `routers/meta.py` |
 | GET `/api/languages` | no | registry metadata | `routers/meta.py` |
 | GET `/api/resources[?language=]` | no | 12 curated doc links | `routers/meta.py` |
-| POST `/api/auth/signup` | no | create account (409 dup) | `routers/auth.py` |
+| POST `/api/auth/signup` | no | create account (409 dup) + welcome notification | `routers/auth.py` |
 | POST `/api/auth/login` | no | JWT (401 wrong) | `routers/auth.py` |
+| POST `/api/auth/resend-verification` | JWT | verify link, 3/hour cap | `routers/auth.py` |
+| POST `/api/auth/verify-email` | no | single-use 24h token → verified | `routers/auth.py` |
+| POST `/api/auth/forgot-password` | no | generic reply + link if account exists | `routers/auth.py` |
+| POST `/api/auth/reset-password` | no | new password + revoke all sessions | `routers/auth.py` |
 | GET/PATCH/DELETE `/api/auth/me` | JWT | profile / delete-all | `routers/auth.py` |
 | POST `/api/sessions` | optional | create (guests: 1 free; `language:auto` detected) | `routers/mentor.py` |
 | GET `/api/sessions` | JWT/guest | history list | `routers/mentor.py` |
@@ -152,6 +156,12 @@ marked.
 | PATCH `/api/projects/milestones/{mid}` | JWT owner | update | `routers/projects.py` |
 | POST `/api/projects/milestones/{mid}/tasks` | JWT owner | add | `routers/projects.py` |
 | PATCH `/api/projects/tasks/{tid}` | JWT owner | update | `routers/projects.py` |
+| GET `/api/notifications` | JWT | Own notifications, newest first | `routers/notifications.py` |
+| GET `/api/notifications/unread-count` | JWT | Unread badge count | `routers/notifications.py` |
+| PATCH `/api/notifications/{id}/read` | JWT owner | Mark one read | `routers/notifications.py` |
+| POST `/api/notifications/read-all` | JWT | Mark all read | `routers/notifications.py` |
+| GET `/api/memory` | JWT | Weak spots + misconception records | `routers/memory.py` |
+| DELETE `/api/memory/misconceptions/{id}` | JWT owner | Delete one record | `routers/memory.py` |
 | GET `/api/projects/{id}/next` | JWT owner | first open task + guidance | `routers/projects.py` |
 
 Proposed (PLANNED, not implemented): practice-session kind, retrieval
@@ -224,7 +234,10 @@ prod), `ALLOWED_ORIGINS`, `LLM_PROVIDER`, `LLM_FALLBACKS`, `LLM_MODEL`,
 `LLM_API_KEY`, `GROQ/GEMINI/OPENAI/ANTHROPIC_API_KEY` (secrets),
 `GROQ/GEMINI/OPENAI/ANTHROPIC_MODEL`, `LLM_TIMEOUT_SECONDS`,
 `LLM_MAX_TOKENS`, `RATE_LIMIT_SIGNUP/LOGIN/MENTOR`, `MAX_HINTS_PER_SESSION`,
-`HISTORY_WINDOW`, `MAX_SESSION_MESSAGES`. Frontend (`frontend/.env`,
+`HISTORY_WINDOW`, `MAX_SESSION_MESSAGES`, `EMAIL_PROVIDER`
+(`console`|smtp), `EMAIL_SENDER`, `EMAIL_SMTP_HOST/PORT/USER/PASSWORD`
+(secrets, smtp only), `FRONTEND_URL` (public, used in email links).
+Frontend (`frontend/.env`,
 optional): `VITE_API_BASE_URL` — **public** config, also settable as a repo
 Variable for Pages builds.
 
