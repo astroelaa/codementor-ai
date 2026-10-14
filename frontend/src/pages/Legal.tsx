@@ -13,15 +13,25 @@ export function Privacy() {
             badges, and streaks. This data exists to power your learning path and
             dashboard.
           </p>
+          <h2 className="h2-serif mt-2 text-xl text-(--text)">How your data flows</h2>
+          <p>
+            When you press Diagnose, send a message, request a hint, submit an
+            explanation, or simplify docs, your code or text plus the recent
+            conversation is sent to the configured AI provider (Groq by default)
+            to generate the reply. Only what is needed for that reply is sent —
+            never your password, never other users' data, never your full history.
+            AI feedback has limits: it can be wrong, which is why the product is
+            built around your own reasoning, not the model's authority.
+          </p>
           <p>
             Your code snippets are sent to the configured AI provider solely to
             generate mentor replies. API keys are held server-side, never logged,
             and never exposed to the browser.
           </p>
           <p>
-            You can delete your account and all associated data at any time. There
-            is no advertising profile, no sale of personal data, and no third-party
-            tracking on this site.
+            You can delete your account and all associated data at any time from
+            the Dashboard → Account section. There is no advertising profile, no
+            sale of personal data, and no third-party tracking on this site.
           </p>
         </div>
       </Reveal>

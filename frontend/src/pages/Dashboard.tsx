@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -25,9 +26,12 @@ const BADGE_ICONS: Record<string, typeof Award> = {
 };
 
 export function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [showDelete, setShowDelete] = useState(false);
+  const [password, setPassword] = useState("");
 
   const dash = useQuery({
     queryKey: ["dashboard"],
@@ -50,6 +54,16 @@ export function Dashboard() {
     },
     onError: (e) =>
       toast("error", e instanceof ApiError ? e.message : "Could not regenerate."),
+  });
+  const removeAccount = useMutation({
+    mutationFn: (pw: string) => api.deleteAccount(pw),
+    onSuccess: () => {
+      logout();
+      navigate("/");
+      toast("success", "Account and all data deleted.");
+    },
+    onError: (e) =>
+      toast("error", e instanceof ApiError ? e.message : "Could not delete."),
   });
   const setItem = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
@@ -283,6 +297,66 @@ export function Dashboard() {
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.12}>
+            <div className="card mt-5 p-6">
+              <h2 className="font-bold">Account</h2>
+              <p className="mt-1 text-sm text-(--muted)">
+                Signed in as <span className="font-semibold text-(--text)">{user.email}</span>
+                {user.display_name ? ` (${user.display_name})` : ""}.
+              </p>
+              {!showDelete ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDelete(true)}
+                  className="btn btn-ghost btn-sm mt-4 border-(--danger) text-(--danger)"
+                >
+                  Delete account and all data…
+                </button>
+              ) : (
+                <form
+                  className="mt-4 flex max-w-sm flex-col gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (password) removeAccount.mutate(password);
+                  }}
+                >
+                  <p className="text-sm text-(--muted)">
+                    This permanently deletes your account, sessions, messages,
+                    and progress. This cannot be undone.
+                  </p>
+                  <label className="label" htmlFor="delete-password">Confirm with your password</label>
+                  <input
+                    id="delete-password"
+                    type="password"
+                    className="input"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDelete(false);
+                        setPassword("");
+                      }}
+                      className="btn btn-ghost btn-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={removeAccount.isPending || !password}
+                      className="btn btn-sm border-(--danger) bg-(--danger) text-white"
+                    >
+                      {removeAccount.isPending ? "Deleting…" : "Yes, delete everything"}
+                    </button>
+                  </div>
+                </form>
               )}
             </div>
           </Reveal>

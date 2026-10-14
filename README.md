@@ -105,9 +105,20 @@ matching key. No code changes, no redeploy of logic.
 | `POST` | `/api/sessions/{id}/messages/stream` | owner | Same turn as SSE (`token`/`done` events) |
 | `POST` | `/api/sessions/{id}/hints` | owner | Spend 1 of 3 hints |
 | `POST` | `/api/sessions/{id}/explain` | owner | Explanation check; solves the session |
+| `GET` | `/ready` | no | Readiness: DB reachable (+ provider names, no AI call) |
+| `GET` | `/api/dashboard` | JWT | Real stats, weak spots, badges, recent sessions |
+| `GET` | `/api/skills` | JWT | Measured skill encounters/scores |
+| `GET`/`POST` | `/api/learning-path`, `/api/learning-path/regenerate` | JWT | Rule-based path from weak spots (`source` marked) |
+| `PATCH` | `/api/learning-path/items/{id}` | JWT | Mark path item todo/doing/done |
+| `POST` | `/api/docs/simplify` | JWT | Plain-language explanation of pasted text |
+| `GET` | `/api/docs/history` | JWT | Past simplifications |
 | `GET` | `/api/snippets` | no | Sample buggy snippets per language |
 
 Guests get exactly one free session per device token, then must sign up.
+
+Session goals: every session carries `goal` (`debug` | `review` | `explain`,
+default `debug`), shaping the mentor's first question while the response
+contract stays identical. Set it in the workspace before pressing Diagnose.
 
 ## Secrets policy
 
@@ -115,6 +126,27 @@ Guests get exactly one free session per device token, then must sign up.
 - `.env` is git-ignored. Only `.env.example` is committed.
 - `/health` and error responses never contain key material (covered by tests).
 - Provider keys are sent only in outbound HTTPS headers, never logged.
+
+## Tests and CI
+
+- Backend: `python -m pytest -q` from `backend/` (58 tests: auth, mentor flow,
+  streaming, fallback, rate limits, dashboard, docs, ops, no-leak checks).
+  Uses a fake LLM and a migrated scratch SQLite DB — no network, no keys.
+- Frontend: `npm run build` from `frontend/` (`tsc --noEmit` + Vite + PWA).
+- CI (`.github/workflows/ci.yml`) runs both on pushes/PRs touching code.
+- Pages deploy (`.github/workflows/pages.yml`) builds with the public repo
+  variable `VITE_API_BASE_URL`.
+
+## Backup and recovery
+
+- **Neon Postgres**: automatic daily backups on the free tier; restore from the
+  Neon dashboard (Branches → Restore) or `pg_dump` before risky operations.
+- **Local SQLite** (`backend/codementor.db`, dev only): copy the file to back
+  up; delete it and run `alembic upgrade head` to start clean.
+- **Migrations** (`backend/alembic/versions/`): always `alembic upgrade head`
+  after pulling; never edit an applied migration — add a new revision.
+  The app never deletes data on boot; deletes happen only via explicit
+  user-account deletion.
 
 ## Roadmap
 

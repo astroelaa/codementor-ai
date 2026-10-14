@@ -1,5 +1,6 @@
 import { StrictMode, Suspense, lazy, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { useRegisterSW } from "virtual:pwa-register/react";
 import {
   HashRouter,
   Navigate,
@@ -10,7 +11,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./lib/auth";
 import { ThemeProvider } from "./lib/theme";
-import { ToastProvider } from "./lib/toast";
+import { ToastProvider, useToast } from "./lib/toast";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import "./index.css";
@@ -57,6 +58,34 @@ function ScrollToTop() {
   return null;
 }
 
+function PwaStatus() {
+  const toast = useToast();
+  // Explicit registration (injectRegister is off): updates and offline state
+  // surface as UI instead of silent swaps. AI mentoring always needs the
+  // network — only the app shell is cached, never API data.
+  const {
+    offlineReady: [offlineReady],
+    needRefresh: [needRefresh],
+    updateServiceWorker,
+  } = useRegisterSW();
+  useEffect(() => {
+    if (offlineReady)
+      toast("info", "App shell cached for offline starts. The mentor needs a connection.");
+  }, [offlineReady, toast]);
+  if (!needRefresh) return null;
+  return (
+    <div className="fixed bottom-20 left-1/2 z-[100] -translate-x-1/2">
+      <button
+        type="button"
+        onClick={() => void updateServiceWorker(true)}
+        className="btn btn-primary btn-sm shadow-xl"
+      >
+        Update available — reload
+      </button>
+    </div>
+  );
+}
+
 function Shell() {
   return (
     <div className="flex min-h-screen flex-col">
@@ -98,6 +127,7 @@ createRoot(document.getElementById("root")!).render(
           <ToastProvider>
             <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <ScrollToTop />
+              <PwaStatus />
               <Shell />
             </HashRouter>
           </ToastProvider>

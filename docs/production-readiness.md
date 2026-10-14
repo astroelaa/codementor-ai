@@ -71,6 +71,14 @@ Live Groq turn verified 2026-10-09 (HTTP 200, Socratic reply, no code leaked).
 - Navbar collapses to hamburger below 1024px (7 links no longer crowd).
 - Lesson: dev `codementor.db` needed `alembic upgrade head` after the goal
   migration; tests use isolated migrated DBs and were unaffected.
+- Measured token usage end to end (`Completion` value object, per-provider
+  extractors, stored in message `meta`, returned on turns/explain/simplify;
+  `null` when the provider reports nothing — never invented).
+- Review-goal prompt preambles verified by unit tests, not by live spend.
+- PWA: manifest + generated icons + service worker ship in `dist/`; API
+  traffic is `NetworkOnly` (no private data cached); SW registration and
+  scope verified in-browser; full airplane-mode test still needs a real device.
+- CI workflow runs backend pytest + frontend typecheck/build on code pushes.
 
 ## 6. Outstanding deployment blockers (account actions)
 
