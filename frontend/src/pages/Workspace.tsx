@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { CodeEditor } from "../components/CodeEditor";
 import { EmptyState } from "../components/bits";
-import { TypingDots } from "../components/bits";
+import { ThinkingOrb } from "thinking-orbs";
 import { Reveal } from "../components/Reveal";
 import { VerifyBanner } from "../components/VerifyBanner";
 import { LANGUAGES, guessLanguage } from "../lib/detect";
@@ -77,7 +77,6 @@ export function Workspace() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState("");
-  const [thinking, setThinking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(false);
   const [provider, setProvider] = useState("");
@@ -150,7 +149,7 @@ export function Workspace() {
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, streaming, thinking]);
+  }, [messages, streaming, busy]);
 
   // Resume a persisted session (?session=<id>): survives refresh + login.
   // Depends on the param (not just mount): same-route navigations such as
@@ -233,7 +232,6 @@ export function Workspace() {
 
   async function runStream(id: string, content: string, snapshot: string) {
     setBusy(true);
-    setThinking(true);
     setProvider("");
     let acc = "";
     let finished = false;
@@ -243,7 +241,6 @@ export function Workspace() {
         else if (ev.kind === "token") {
           acc += ev.text;
           setStreaming(acc);
-          setThinking(false);
         } else if (ev.kind === "done") {
           applyTurn(ev.turn);
           finished = true;
@@ -265,7 +262,6 @@ export function Workspace() {
       if (!finished) handleApiError(err);
     } finally {
       setBusy(false);
-      setThinking(false);
       setStreaming("");
     }
   }
@@ -698,13 +694,18 @@ export function Workspace() {
                     </motion.div>
                   ))}
                 </AnimatePresence>
-                {thinking && (
+                {busy && !streaming && (
                   <div className="flex gap-2">
                     <span className="grid size-7 place-items-center rounded-full bg-(--accent) text-white" aria-hidden="true">
                       <Bot size={14} strokeWidth={1.5} />
                     </span>
                     <div className="rounded-2xl rounded-tl-sm border border-(--border) bg-(--surface-2) px-4 py-3">
-                      <TypingDots />
+                      <ThinkingOrb
+                        state="working"
+                        size={32}
+                        theme="auto"
+                        aria-label="Mentor is thinking"
+                      />
                     </div>
                   </div>
                 )}

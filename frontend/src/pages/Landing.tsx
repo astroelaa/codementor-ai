@@ -161,6 +161,7 @@ export function Landing() {
       {/* ---------- hero ---------- */}
       <section className="relative overflow-hidden">
         <div className="bg-grid pointer-events-none absolute inset-0" aria-hidden="true" />
+        <div className="aurora pointer-events-none absolute inset-0" aria-hidden="true" />
         <div className="relative mx-auto grid w-[min(1200px,92%)] items-center gap-12 py-24 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:py-32">
           <div>
             <Reveal>

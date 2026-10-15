@@ -6,12 +6,12 @@ import {
   Check,
   ChevronRight,
   FolderKanban,
-  Loader2,
   Play,
   Plus,
   RefreshCw,
   Sparkles,
 } from "lucide-react";
+import { ThinkingOrb } from "thinking-orbs";
 import { ApiError, api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useToast } from "../lib/toast";
@@ -296,7 +296,7 @@ export function Projects() {
                     disabled={briefBusy || briefText.trim().length < 10}
                     className="btn btn-ghost btn-sm mt-2"
                   >
-                    {briefBusy ? <Loader2 size={14} strokeWidth={1.5} className="animate-spin" /> : <Sparkles size={14} strokeWidth={1.5} />}
+                    {briefBusy ? <ThinkingOrb state="composing" size={20} theme="auto" aria-label="Generating brief" /> : <Sparkles size={14} strokeWidth={1.5} />}
                     {briefBusy ? "Generating…" : "Generate brief + milestones"}
                   </button>
                 </div>

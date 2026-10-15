@@ -79,11 +79,12 @@ body {
   border-radius: 16px;
 }
 .card-hover {
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 .card-hover:hover {
   border-color: var(--border-strong);
   transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 .glass {
   background: color-mix(in srgb, var(--surface) 82%, transparent);
@@ -122,6 +123,11 @@ body {
 }
 .btn-primary:hover:not(:disabled) {
   filter: brightness(1.1);
+  box-shadow: 0 8px 28px var(--glow), 0 0 0 1px var(--border-strong);
+  transform: translateY(-1px);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
 }
 .btn-ghost {
   border-color: var(--border-strong);
@@ -179,6 +185,72 @@ body {
 .glow-accent {
   background: radial-gradient(closest-side, var(--glow), transparent);
   filter: blur(10px);
+}
+
+/* ---------- aurora background (landing hero only) ----------
+   Two slow-drifting violet/indigo/cyan washes behind the hero content.
+   Pure CSS, pointer-transparent, static when reduced motion is on. */
+.aurora {
+  overflow: hidden;
+}
+.aurora::before,
+.aurora::after {
+  content: "";
+  position: absolute;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  will-change: transform;
+}
+.aurora::before {
+  left: -18vmax;
+  top: -22vmax;
+  background: radial-gradient(
+    closest-side,
+    rgba(124, 92, 255, 0.55),
+    rgba(76, 61, 220, 0.18),
+    transparent 70%
+  );
+  animation: aurora-drift-a 26s ease-in-out infinite alternate;
+}
+.aurora::after {
+  right: -20vmax;
+  top: -10vmax;
+  background: radial-gradient(
+    closest-side,
+    rgba(56, 189, 248, 0.28),
+    rgba(124, 92, 255, 0.22),
+    transparent 70%
+  );
+  animation: aurora-drift-b 32s ease-in-out infinite alternate;
+}
+[data-theme="light"] .aurora::before,
+[data-theme="light"] .aurora::after {
+  opacity: 0.22;
+}
+@keyframes aurora-drift-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(9vmax, 5vmax, 0) scale(1.12);
+  }
+}
+@keyframes aurora-drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.08);
+  }
+  to {
+    transform: translate3d(-8vmax, 6vmax, 0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora::before,
+  .aurora::after {
+    animation: none;
+  }
 }
 
 /* ---------- meter ---------- */

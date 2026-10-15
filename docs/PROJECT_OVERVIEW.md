@@ -71,6 +71,13 @@ flowchart LR
 **Components** (`frontend/src/components/`): Navbar (7 links, hamburger below
 1024px), Footer (4 columns), Logo (inline SVG), AnchorLink (hash-safe),
 CodeEditor (lazy CodeMirror), Reveal/Counter/Faq, Toast, TypingDots/skeletons.
+Loading indicators: `thinking-orbs@0.3.2` (MIT, canvas, `ThinkingOrb`
+`working` size 32 in the mentor thinking row while a request is in flight,
+`composing` size 20 on the brief button; `theme="auto"` follows the app
+`data-theme`; only states with a genuinely active operation are used —
+`solving`/`searching`/`connecting`/`listening` have no separately observable
+frontend step, so they are not shown). Landing hero carries one pure-CSS
+aurora wash (violet/indigo/cyan, reduced-motion static, pointer-transparent).
 
 **State.** TanStack Query for server data (5-min stale, no refetch on focus);
 local `useState` for chat/drafts; `localStorage` for JWT (`cm_token`), guest
