@@ -96,7 +96,11 @@ learning-path), `docs` (simplify/history), `projects` (+milestones/tasks/
 brief/next).
 
 **Services** (`app/services/`): `mentor.py` (history window 20, JSON
-extraction), `languages.py` (authoritative registry), `detect.py`
+extraction), `orchestration.py` (deterministic intent, previous-question
+surfacing, `is_repeat` ≥0.82 + containment, one-retry nudge, code snapshots,
+`turn_context_block`), `knowledge.py` (18 curated cards, token-overlap
+`retrieve(top_k=2)`, `format_references` UNTRUSTED blocks, `citations`
+from retrieval only), `languages.py` (authoritative registry), `detect.py`
 (regex scoring), `snippets.py` (10 samples), `progress.py`
 (activity/streak/badges/skills).
 
@@ -134,19 +138,19 @@ marked.
 | POST `/api/auth/forgot-password` | no | generic reply + link if account exists | `routers/auth.py` |
 | POST `/api/auth/reset-password` | no | new password + revoke all sessions | `routers/auth.py` |
 | GET/PATCH/DELETE `/api/auth/me` | JWT | profile / delete-all | `routers/auth.py` |
-| POST `/api/sessions` | optional | create (guests: 1 free; `language:auto` detected) | `routers/mentor.py` |
+| POST `/api/sessions` | optional | create (guests: 1 free; `language:auto` detected; `mode: practice\|mycode`; blank code → 422) | `routers/mentor.py` |
 | GET `/api/sessions` | JWT/guest | history list | `routers/mentor.py` |
 | GET `/api/sessions/{id}` | owner | full replay | `routers/mentor.py` |
-| POST `.../{id}/messages` | owner | Socratic turn (JSON) | `routers/mentor.py` |
-| POST `.../{id}/messages/stream` | owner | SSE `provider/token/done/error` | `routers/mentor.py` |
-| POST `.../{id}/hints` | owner | 1 of 3 hints (403 at 0) | `routers/mentor.py` |
-| POST `.../{id}/explain` | owner | judge explanation; solves | `routers/mentor.py` |
+| POST `.../{id}/messages` | owner | Socratic turn (JSON; optional `code` snapshot; `sources[]`) | `routers/mentor.py` |
+| POST `.../{id}/messages/stream` | owner | SSE `provider/token/done/error` (`code` snapshot; `done` carries `sources[]`) | `routers/mentor.py` |
+| POST `.../{id}/hints` | owner | 1 of 3 hints (403 at 0; optional `code`) | `routers/mentor.py` |
+| POST `.../{id}/explain` | owner | judge explanation; solves (optional `code`) | `routers/mentor.py` |
 | GET `/api/dashboard` | JWT | real stats/weak-spots/badges | `routers/progress.py` |
 | GET `/api/skills` | JWT | measured encounters/scores | `routers/progress.py` |
 | GET `/api/learning-path` | JWT | active path or `null` | `routers/progress.py` |
 | POST `/api/learning-path/regenerate` | JWT | rebuild from weak spots | `routers/progress.py` |
 | PATCH `/api/learning-path/items/{id}` | JWT | todo/doing/done | `routers/progress.py` |
-| POST `/api/docs/simplify` | JWT | explanation+example+question | `routers/docs.py` |
+| POST `/api/docs/simplify` | JWT | explanation+example+question (+`sources[]` from approved retrieval) | `routers/docs.py` |
 | GET `/api/docs/history` | JWT | past simplifications | `routers/docs.py` |
 | POST `/api/projects` | JWT | create (+language check) | `routers/projects.py` |
 | GET `/api/projects` | JWT | list with counts | `routers/projects.py` |
@@ -164,22 +168,30 @@ marked.
 | DELETE `/api/memory/misconceptions/{id}` | JWT owner | Delete one record | `routers/memory.py` |
 | GET `/api/projects/{id}/next` | JWT owner | first open task + guidance | `routers/projects.py` |
 
-Proposed (PLANNED, not implemented): practice-session kind, retrieval
-endpoints, execution endpoints — none exist.
+Proposed (PLANNED, not implemented): vector-search retrieval,
+LangGraph/agents, new providers, code execution (Judge0), GitHub repo
+integration. Implemented instead: practice/mycode session modes (no
+execution), lexical approved-reference retrieval (`docs/RESOURCE_RETRIEVAL.md`),
+explicit-Python orchestration (`docs/MENTOR_ORCHESTRATION.md`, LangGraph
+evaluated and not needed).
 
 ## 6. AI mentor lifecycle
 
-1. UI sends code + language/goal (+optional `project_id`) → `POST /api/sessions`.
-2. Turn: user message stored → last-20 history built → system prompt assembled
+1. UI sends code + language/goal/mode (+optional `project_id`) → `POST /api/sessions`.
+2. Turn: user message stored → `_prepare_turn()` (rule-based intent, previous
+   question surfaced, code snapshot applied when newer, approved references
+   retrieved, context block built) → system prompt assembled
    (goal preamble + Socratic rules incl. greeting rule + language guidance +
-   full code block) → `LLMManager.complete` tries configured providers in order.
+   full current code block + references + turn notes) → `LLMManager.complete` tries configured providers in order.
 3. Model must return strict JSON (`reply`, `understanding_score`,
-   `misconception?`, `next_topics`); parse/validation failure → HTTP 502.
+   `misconception?`, `evaluation?`, `next_topics`); parse/validation failure → HTTP 502.
+   Non-streaming retries once on detected repeat; streaming relies on
+   prompt-level do-not-repeat (tokens already sent).
 4. Streaming variant streams prose tokens, then runs a scoring call and emits
-   a final `done` event with the same structured payload.
-5. Assistant reply, score, misconception row, skill bump, activity row, and
-   measured token usage persist in one transaction; hints/explain follow the
-   same path with their own prompts. Solved sessions become read-only (409).
+   a final `done` event with the same structured payload + `sources[]`.
+5. Assistant reply, score, misconception row, skill bump, activity row,
+   `meta.evaluation`, persisted `meta.sources`, and measured token usage persist in one transaction;
+   hints/explain follow the same path with their own prompts. Solved sessions become read-only (409).
 
 ## 7. Programming languages
 
@@ -202,9 +214,11 @@ in production, refused otherwise at boot. SQLAlchemy 2, portable string-UUID
 keys. 15 tables (§2), FKs + indexes + unique constraints; cascades on user
 delete. Migrations: `64bf…` (schema+seeds), `f4c926f` (path source),
 `8f967aef` (session goal), `3445aae6` (projects/milestones/tasks +
-sessions.project_id, batch-mode FK for SQLite). Fresh DBs migrate cleanly
-(proven by the test suite, which upgrades scratch DBs). **Production
-Postgres: NOT TESTED** (Neon pending) — local + mocked coverage only.
+sessions.project_id, batch-mode FK for SQLite), `567d88…` (email
+verification/tokens), `ef19ab…` (notifications/preferences),
+`dc55a8…` (sessions.mode, default `practice`). Fresh DBs migrate cleanly
+(proven by the test suite, which upgrades scratch DBs). Single head:
+`dc55a8dcae7e`. **Production Postgres: NOT TESTED** (Neon pending) — local + mocked coverage only.
 
 ## 9. Projects and milestones
 
@@ -257,10 +271,15 @@ Variable for Pages builds.
 
 ## 13. Testing
 
-- Backend: `python -m pytest -q` from `backend/` — **73 passed** (auth,
+- Backend: `python -m pytest -q` from `backend/` — **121 passed** (auth,
   guest caps, mentor/stream/hints/explain, ownership isolation, dashboard,
-  docs, projects, detection, prompts, usage extractors, ops, no-leak).
-  Scratch migrated SQLite DBs; fake LLM (no network). Latest full run green.
+  docs, projects, detection, prompts, usage extractors, ops, no-leak,
+  orchestration/intent/anti-repeat/code-snapshots/citations/modes — 29 in
+  `test_orchestration.py`). Scratch migrated SQLite DBs; fake LLM (no
+  network). Latest full run green. Live Groq spot-checks (throwaway dev user,
+  current code): partial-answer `average([])` scenario fixed with real
+  citations, greeting/explain/code-update/resume/sources-persistence and
+  streaming all 200 (one transient 502 retried OK).
 - Frontend: `npm run build` (`tsc --noEmit` + Vite + PWA) — **exit 0**.
   No unit-test runner; browser-verified flows: signup/login, diagnose,
   streaming, hints, solve, resume-after-refresh, project create, dashboard
@@ -306,10 +325,13 @@ requires a connection (stated in UI).
 ## 17. Roadmap
 
 Priorities: language registry extras (done: C/Rust) → mentor depth (done:
-guidance + greeting rule) → projects (done) → references (done: link
-catalog). Still evaluation-only: RAG/vector search, LangGraph/agents, new
-providers, code execution (Judge0), GitHub repo integration, practice
-sessions. Do not treat any of these as implemented.
+guidance + greeting rule + evaluation + anti-repeat) → projects (done) →
+references (done: 18-card approved corpus with lexical retrieval, not vector
+search). Still evaluation-only: vector search, LangGraph/agents (evaluated,
+not needed — see `docs/MENTOR_ORCHESTRATION.md`), new providers, code
+execution (Judge0), GitHub repo integration. Do not treat any of these as implemented.
+No code is executed anywhere: language registry `execution` is `"none"` for
+every language; the UI never claims otherwise.
 
 ## 18. New developer setup
 
