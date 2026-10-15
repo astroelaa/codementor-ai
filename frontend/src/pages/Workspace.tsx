@@ -34,6 +34,7 @@ import {
   type Badge,
   type MentorTurn,
   type Misconception,
+  type SourceRef,
 } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useToast } from "../lib/toast";
@@ -46,6 +47,7 @@ interface ChatMsg {
   role: "user" | "assistant";
   content: string;
   misconception?: Misconception | null;
+  sources?: SourceRef[] | null;
 }
 
 const BADGE_ICONS: Record<string, typeof Flag> = {
@@ -67,7 +69,9 @@ export function Workspace() {
 
   const [langSel, setLangSel] = useState<string>("auto");
   const [goal, setGoal] = useState("debug");
+  const [mode, setMode] = useState<"practice" | "mycode">("practice");
   const [code, setCode] = useState("");
+  const [starterCode, setStarterCode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [status, setStatus] = useState<"active" | "solved" | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -162,8 +166,10 @@ export function Workspace() {
         setSessionId(s.id);
         setStatus(s.status);
         setCode(s.code);
+        setStarterCode(s.code);
         setLangSel(s.language);
         setGoal(s.goal || "debug");
+        setMode(s.mode === "mycode" ? "mycode" : "practice");
         setScore(s.understanding_score);
         setHintsLeft(s.hints_left);
         setTopics([]);
@@ -176,6 +182,14 @@ export function Workspace() {
             misconception:
               ((m.meta ?? {}) as { misconception?: Misconception | null })
                 .misconception ?? null,
+            sources:
+              (Array.isArray(((m.meta ?? {}) as { sources?: unknown }).sources)
+                ? (((m.meta ?? {}) as { sources?: SourceRef[] }).sources ?? [])
+                : []
+              ).filter(
+                (src): src is SourceRef =>
+                  !!src && typeof src.title === "string" && typeof src.url === "string",
+              ),
           })),
         );
         if (s.guest_token) tokenStore.guest = s.guest_token;
@@ -212,18 +226,19 @@ export function Workspace() {
         role: "assistant",
         content: turn.reply,
         misconception: turn.misconception,
+        sources: turn.sources ?? [],
       },
     ]);
   }
 
-  async function runStream(id: string, content: string) {
+  async function runStream(id: string, content: string, snapshot: string) {
     setBusy(true);
     setThinking(true);
     setProvider("");
     let acc = "";
     let finished = false;
     try {
-      for await (const ev of streamMessage(id, content)) {
+      for await (const ev of streamMessage(id, content, snapshot)) {
         if (ev.kind === "provider") setProvider(ev.provider);
         else if (ev.kind === "token") {
           acc += ev.text;
@@ -237,7 +252,7 @@ export function Workspace() {
           if (ev.transport) {
             // Never reached the server: one plain-JSON retry is safe.
             try {
-              applyTurn(await api.postMessage(id, content));
+              applyTurn(await api.postMessage(id, content, snapshot));
             } catch (err) {
               handleApiError(err);
             }
@@ -264,11 +279,13 @@ export function Workspace() {
     setGuestCapped(false);
     try {
       const projectParam = searchParams.get("project");
-      const s = await api.createSession(langSel, code, goal, projectParam);
+      const s = await api.createSession(langSel, code, goal, projectParam, mode);
       if (s.guest_token) tokenStore.guest = s.guest_token;
       setProjectId(s.project_id);
       // Sync the selector to the server-stored language (authoritative).
       setLangSel(s.language);
+      setMode(s.mode === "mycode" ? "mycode" : "practice");
+      setStarterCode(s.code);
       setSessionId(s.id);
       setStatus("active");
       setMessages([]);
@@ -278,7 +295,7 @@ export function Workspace() {
       setBadges(s.badges_earned);
       if (s.badges_earned.length > 0)
         toast("success", "First session started. Good luck.");
-      await runStream(s.id, OPENING);
+      await runStream(s.id, OPENING, s.code);
     } catch (err) {
       handleApiError(err);
     } finally {
@@ -291,7 +308,7 @@ export function Workspace() {
     if (!content || busy || !sessionId || status !== "active") return;
     setInput("");
     setMessages((m) => [...m, { id: `u-${Date.now()}`, role: "user", content }]);
-    await runStream(sessionId, content);
+    await runStream(sessionId, content, code);
   }
 
   async function askHint() {
@@ -306,7 +323,7 @@ export function Workspace() {
       { id: `u-${Date.now()}`, role: "user", content: "I am stuck. Give me a hint, not the answer." },
     ]);
     try {
-      applyTurn(await api.requestHint(sessionId));
+      applyTurn(await api.requestHint(sessionId, code));
     } catch (err) {
       handleApiError(err);
     } finally {
@@ -320,7 +337,7 @@ export function Workspace() {
     setExplaining(true);
     setMessages((m) => [...m, { id: `u-${Date.now()}`, role: "user", content: text }]);
     try {
-      const r = await api.submitExplanation(sessionId, text);
+      const r = await api.submitExplanation(sessionId, text, code);
       setScore(r.understanding_score);
       setHintsLeft(r.hints_left);
       setMessages((m) => [
@@ -347,6 +364,7 @@ export function Workspace() {
     setSessionId(null);
     setStatus(null);
     setProjectId(null);
+    setStarterCode(null);
     setMessages([]);
     setInput("");
     setStreaming("");
@@ -382,7 +400,7 @@ export function Workspace() {
               Debug with a mentor
             </h1>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             {status && (
               <span className={`tag ${status === "solved" ? "border-(--success)" : ""}`}>
                 {status === "solved" ? <CircleCheck size={13} strokeWidth={1.5} /> : null}
@@ -390,6 +408,12 @@ export function Workspace() {
               </span>
             )}
             {status && <span className="tag">{goal}</span>}
+            {status && <span className="tag">{effectiveLanguage}</span>}
+            {status && (
+              <span className="tag" title={mode === "practice" ? "Seeded challenge" : "Your own code"}>
+                {mode === "practice" ? "practice" : "my code"}
+              </span>
+            )}
             {projectId && (
               <Link to="/projects" className="tag" title="Linked project">
                 project
@@ -499,7 +523,7 @@ export function Workspace() {
               <CodeEditor
                 language={effectiveLanguage}
                 value={code}
-                onChange={inSession ? () => {} : setCode}
+                onChange={setCode}
                 label="Your code"
               />
               <div className="flex flex-wrap items-center gap-3 border-t border-(--border) px-4 py-3">
@@ -511,6 +535,43 @@ export function Workspace() {
                     </span>
                   ) : (
                     <>
+                      <div className="flex gap-1.5" role="radiogroup" aria-label="Session mode">
+                        {(
+                          [
+                            ["practice", "Practice"],
+                            ["mycode", "My Code"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <button
+                            key={value}
+                            role="radio"
+                            aria-checked={mode === value}
+                            type="button"
+                            onClick={() => {
+                              setMode(value);
+                              if (value === "mycode" && snippetByLang.get("python") === code) {
+                                setCode("");
+                              }
+                              if (value === "practice" && !code) {
+                                const py = snippetByLang.get("python");
+                                if (py) setCode(py);
+                              }
+                            }}
+                            title={
+                              value === "practice"
+                                ? "Work on a seeded challenge"
+                                : "Paste or write your own code"
+                            }
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              mode === value
+                                ? "bg-(--accent-soft) text-(--accent-text)"
+                                : "text-(--muted) hover:text-(--text)"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                       <div className="flex gap-1.5" role="radiogroup" aria-label="Session goal">
                         {(
                           [
@@ -550,9 +611,22 @@ export function Workspace() {
                     </>
                   )
                 ) : (
-                  <span className="text-xs text-(--faint)">
-                    Code is locked while the session runs. Start a new session to change it.
-                  </span>
+                  <>
+                    <span className="text-xs text-(--faint)">
+                      Edits are sent with each message.
+                    </span>
+                    {mode === "practice" && starterCode && (
+                      <button
+                        type="button"
+                        onClick={() => setCode(starterCode)}
+                        className="btn btn-ghost btn-sm ml-auto"
+                        disabled={busy || code === starterCode}
+                        title="Restore the initial challenge code"
+                      >
+                        <RotateCcw size={14} strokeWidth={1.5} /> Restore starter code
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -603,6 +677,22 @@ export function Workspace() {
                             <Tag size={12} strokeWidth={1.5} />
                             {m.misconception.type}
                           </span>
+                        )}
+                        {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+                          <ul className="mt-1.5 flex flex-col gap-1" aria-label="References">
+                            {m.sources.map((s) => (
+                              <li key={s.url} className="text-xs text-(--muted)">
+                                <a
+                                  href={s.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="underline decoration-dotted underline-offset-2 hover:text-(--text)"
+                                >
+                                  {s.title}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
                         )}
                       </div>
                     </motion.div>

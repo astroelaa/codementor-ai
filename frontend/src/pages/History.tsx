@@ -161,15 +161,48 @@ export function History() {
                       >
                         {m.role === "user" ? "Y" : <Bot size={14} strokeWidth={1.5} />}
                       </span>
-                      <p
-                        className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed ${
-                          m.role === "user"
-                            ? "rounded-tr-sm bg-(--accent) text-white"
-                            : "rounded-tl-sm border border-(--border) bg-(--surface-2)"
-                        }`}
-                      >
-                        {m.content}
-                      </p>
+                      <div className="max-w-[88%]">
+                        <p
+                          className={`rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed ${
+                            m.role === "user"
+                              ? "rounded-tr-sm bg-(--accent) text-white"
+                              : "rounded-tl-sm border border-(--border) bg-(--surface-2)"
+                          }`}
+                        >
+                          {m.content}
+                        </p>
+                        {m.role === "assistant" &&
+                          Array.isArray(
+                            ((m.meta ?? {}) as { sources?: unknown }).sources,
+                          ) &&
+                          (
+                            ((m.meta ?? {}) as { sources?: { title?: unknown; url?: unknown }[] })
+                              .sources ?? []
+                          ).length > 0 && (
+                            <ul className="mt-1.5 flex flex-col gap-1" aria-label="References">
+                              {(
+                                ((m.meta ?? {}) as { sources?: { title?: unknown; url?: unknown }[] })
+                                  .sources ?? []
+                              )
+                                .filter(
+                                  (s): s is { title: string; url: string } =>
+                                    !!s && typeof s.title === "string" && typeof s.url === "string",
+                                )
+                                .map((s) => (
+                                  <li key={s.url} className="text-xs text-(--muted)">
+                                    <a
+                                      href={s.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="underline decoration-dotted underline-offset-2 hover:text-(--text)"
+                                    >
+                                      {s.title}
+                                    </a>
+                                  </li>
+                                ))}
+                            </ul>
+                          )}
+                      </div>
                     </div>
                   ))}
                 </div>

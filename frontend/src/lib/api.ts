@@ -46,6 +46,7 @@ export interface SessionDetail {
   id: string;
   language: string;
   goal: string;
+  mode: string;
   project_id: string | null;
   code: string;
   status: "active" | "solved";
@@ -187,6 +188,10 @@ export interface MemoryData {
     created_at: string;
   }[];
 }
+export interface SourceRef {
+  title: string;
+  url: string;
+}
 export interface MentorTurn {
   reply: string;
   understanding_score: number;
@@ -195,6 +200,7 @@ export interface MentorTurn {
   next_topics: string[];
   message_id: string;
   provider: string;
+  sources: SourceRef[];
 }
 export interface ExplainResult {
   passed: boolean;
@@ -320,10 +326,22 @@ export const api = {
   },
 
   /* ---------- mentor ---------- */
-  createSession(language: string, code: string, goal = "debug", projectId?: string | null): Promise<SessionDetail> {
+  createSession(
+    language: string,
+    code: string,
+    goal = "debug",
+    projectId?: string | null,
+    mode?: "practice" | "mycode",
+  ): Promise<SessionDetail> {
     return request<SessionDetail>("/api/sessions", {
       method: "POST",
-      body: JSON.stringify({ language, code, goal, project_id: projectId ?? null }),
+      body: JSON.stringify({
+        language,
+        code,
+        goal,
+        project_id: projectId ?? null,
+        ...(mode ? { mode } : {}),
+      }),
     });
   },
   listSessions(): Promise<SessionListItem[]> {
@@ -332,19 +350,28 @@ export const api = {
   getSession(id: string): Promise<SessionDetail> {
     return request<SessionDetail>(`/api/sessions/${id}`);
   },
-  postMessage(sessionId: string, content: string): Promise<MentorTurn> {
+  postMessage(sessionId: string, content: string, code?: string): Promise<MentorTurn> {
     return request<MentorTurn>(`/api/sessions/${sessionId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        content,
+        ...(code !== undefined ? { code } : {}),
+      }),
     });
   },
-  requestHint(sessionId: string): Promise<MentorTurn> {
-    return request<MentorTurn>(`/api/sessions/${sessionId}/hints`, { method: "POST" });
+  requestHint(sessionId: string, code?: string): Promise<MentorTurn> {
+    return request<MentorTurn>(`/api/sessions/${sessionId}/hints`, {
+      method: "POST",
+      body: JSON.stringify({ ...(code !== undefined ? { code } : {}) }),
+    });
   },
-  submitExplanation(sessionId: string, explanation: string): Promise<ExplainResult> {
+  submitExplanation(sessionId: string, explanation: string, code?: string): Promise<ExplainResult> {
     return request<ExplainResult>(`/api/sessions/${sessionId}/explain`, {
       method: "POST",
-      body: JSON.stringify({ explanation }),
+      body: JSON.stringify({
+        explanation,
+        ...(code !== undefined ? { code } : {}),
+      }),
     });
   },
   snippets(): Promise<Snippet[]> {
@@ -476,6 +503,7 @@ export type StreamEvent =
 export async function* streamMessage(
   sessionId: string,
   content: string,
+  code?: string,
   signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
   let res: Response;
@@ -483,7 +511,10 @@ export async function* streamMessage(
     res = await fetch(`${API_BASE}/api/sessions/${sessionId}/messages/stream`, {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        content,
+        ...(code !== undefined ? { code } : {}),
+      }),
       signal,
     });
   } catch {
