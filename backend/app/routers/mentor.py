@@ -28,6 +28,7 @@ from app.schemas import (
     ExplainFeedback,
     ExplainRequest,
     ExplainResponse,
+    HintRequest,
     MentorFeedback,
     MentorMessageResponse,
     MessageCreate,
@@ -35,12 +36,22 @@ from app.schemas import (
     SessionBase,
     SessionCreate,
     SessionDetailResponse,
+    SourceRef,
     UsageInfo,
 )
 from app.services.detect import detect_language
 from app.services.email import EmailBackend, get_email_backend, solve_congrats_email
+from app.services.knowledge import citations, format_references
 from app.services.memory import build_project_context, build_session_recap
 from app.services.mentor import build_history, extract_json_dict, parse_feedback
+from app.services.orchestration import (
+    classify_intent,
+    extract_code_block,
+    is_repeat,
+    previous_assistant_message,
+    retrieve_for_turn,
+    turn_context_block,
+)
 from app.services.progress import (
     award_badge,
     award_on_solve,
@@ -97,6 +108,7 @@ def _session_base(
         language=session.language,
         goal=session.goal,
         project_id=session.project_id,
+        mode=session.mode,
         code=session.code,
         status=session.status,
         understanding_score=session.understanding_score,
@@ -136,6 +148,45 @@ def _memory_context(
     return recap, project_context
 
 
+def _prepare_turn(
+    db: DbSession, session: DebugSession, content: str, explicit_code: str | None
+) -> dict:
+    """One orchestrated turn setup: intent, code snapshot, context, refs.
+
+    Mutates session.code when newer code arrives (persisted by the caller's
+    commit). Returns everything prompt builders and _mentor_reply need.
+    """
+    intent = classify_intent(content)
+    prev = previous_assistant_message(session)
+    prev_q = prev.content if prev else None
+    new_code: str | None = None
+    if explicit_code and explicit_code.strip() and explicit_code.strip() != session.code:
+        new_code = explicit_code.strip()[:8000]
+    else:
+        block = extract_code_block(content)
+        if block and block != session.code:
+            new_code = block[:8000]
+    code_updated = False
+    if new_code:
+        session.code = new_code
+        code_updated = True
+    cards = retrieve_for_turn(session.language, content, prev_q)
+    turn_notes = turn_context_block(
+        intent=intent,
+        previous_question=prev_q,
+        code_updated=code_updated,
+        resources=cards,
+    )
+    return {
+        "intent": intent,
+        "previous_question": prev_q,
+        "turn_notes": turn_notes,
+        "references": format_references(cards),
+        "cites": citations(cards),
+        "code_updated": code_updated,
+    }
+
+
 def _misconception_out(m: Misconception | None) -> MisconceptionOut | None:
     if m is None:
         return None
@@ -163,6 +214,7 @@ def _persist_assistant_turn(
     provider: str,
     is_hint: bool,
     usage: dict | None = None,
+    sources: list[dict] | None = None,
 ) -> tuple[Message, Misconception | None]:
     session.understanding_score = feedback.understanding_score
     stored_misc: Misconception | None = None
@@ -174,6 +226,14 @@ def _persist_assistant_turn(
             description=feedback.misconception.description.strip(),
         )
         db.add(stored_misc)
+    # Persisted citations: sanitized snapshot of the retrieval for this turn
+    # so resume/replay can show them. Free-form JSON meta needs no migration;
+    # older rows simply lack the key and read back as [].
+    stored_sources = [
+        {"title": str(s.get("title", "")), "url": str(s.get("url", ""))}
+        for s in (sources or [])
+        if s.get("title") and s.get("url")
+    ]
     message = Message(
         session_id=session.id,
         role="assistant",
@@ -188,6 +248,10 @@ def _persist_assistant_turn(
             ),
             "hint": is_hint,
             "usage": usage,
+            "evaluation": (
+                feedback.evaluation.model_dump() if feedback.evaluation else None
+            ),
+            "sources": stored_sources,
         },
     )
     db.add(message)
@@ -212,21 +276,43 @@ def _mentor_reply(
     system: str,
     history: list[dict],
     is_hint: bool,
+    intent: str = "answer",
+    previous_question: str | None = None,
+    sources: list[dict] | None = None,
 ) -> tuple[MentorMessageResponse, str]:
     settings = request.app.state.settings
-    try:
-        completion, provider = manager.complete(
-            system=system, messages=history, temperature=0.4
+
+    def _complete_once(sys_text: str):
+        try:
+            completion, provider = manager.complete(
+                system=sys_text, messages=history, temperature=0.4
+            )
+        except LLMError as exc:
+            raise llm_error_to_http(exc)
+        try:
+            return parse_feedback(completion.text), completion, provider
+        except LLMError:
+            raise HTTPException(
+                status_code=502,
+                detail="The mentor returned an unusable response. Try again.",
+            )
+
+    feedback, completion, provider = _complete_once(system)
+    # Anti-repetition: at most ONE retry with corrective context, never a loop.
+    if (
+        previous_question
+        and intent in ("answer", "explanation_request", "question")
+        and is_repeat(feedback.reply, previous_question)
+    ):
+        nudge = (
+            system
+            + "\n\nCORRECTION: the student just responded to your last question. "
+            + f'Your previous question was: "{previous_question.strip()[:300]}" '
+            + "Do not repeat it in the same or reworded form. First evaluate "
+            + "their answer using the evaluation contract, then ask a "
+            + "DIFFERENT follow-up question."
         )
-    except LLMError as exc:
-        raise llm_error_to_http(exc)
-    try:
-        feedback = parse_feedback(completion.text)
-    except LLMError:
-        raise HTTPException(
-            status_code=502,
-            detail="The mentor returned an unusable response. Try again.",
-        )
+        feedback, completion, provider = _complete_once(nudge)
     message, stored_misc = _persist_assistant_turn(
         db,
         session,
@@ -235,7 +321,11 @@ def _mentor_reply(
         provider=provider,
         is_hint=is_hint,
         usage=completion.usage,
+        sources=sources,
     )
+    cite_models = [
+        SourceRef(title=s["title"], url=s["url"]) for s in (sources or [])
+    ]
     return (
         MentorMessageResponse(
             reply=feedback.reply,
@@ -246,6 +336,7 @@ def _mentor_reply(
             message_id=message.id,
             provider=provider,
             usage=_to_usage_info(completion.usage),
+            sources=cite_models,
         ),
         provider,
     )
@@ -264,6 +355,12 @@ def create_session(
     user: User | None = Depends(deps.get_optional_user),
 ):
     ensure_reference_data(db)
+    stripped_code = payload.code.strip()
+    if not stripped_code:
+        raise HTTPException(
+            status_code=422,
+            detail="Code must not be empty. Paste your code or load a sample.",
+        )
     language = payload.language
     if language == "auto":
         language = detect_language(payload.code)
@@ -297,7 +394,8 @@ def create_session(
         guest_token=guest_token,
         language=language,
         goal=payload.goal,
-        code=payload.code.strip(),
+        mode=payload.mode,
+        code=stripped_code,
         status="active",
     )
     if payload.project_id:
@@ -396,8 +494,15 @@ def post_message(
             status_code=409,
             detail="This session is getting long. Start a fresh session to continue.",
         )
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(
+            status_code=422,
+            detail="Message must not be empty.",
+        )
+    turn = _prepare_turn(db, session, content, payload.code)
     db.add(
-        Message(session_id=session.id, role="user", content=payload.content.strip())
+        Message(session_id=session.id, role="user", content=content)
     )
     db.commit()
     history = build_history(session.messages, settings.history_window)
@@ -409,6 +514,8 @@ def post_message(
         goal=session.goal,
         recap=recap,
         project_context=project_context,
+        references=turn["references"],
+        turn_notes=turn["turn_notes"],
     )
     response, _ = _mentor_reply(
         db=db,
@@ -419,6 +526,9 @@ def post_message(
         system=system,
         history=history,
         is_hint=False,
+        intent=turn["intent"],
+        previous_question=turn["previous_question"],
+        sources=turn["cites"],
     )
     return response
 
@@ -445,8 +555,15 @@ def post_message_stream(
             status_code=409,
             detail="This session is getting long. Start a fresh session to continue.",
         )
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(
+            status_code=422,
+            detail="Message must not be empty.",
+        )
+    turn = _prepare_turn(db, session, content, payload.code)
     db.add(
-        Message(session_id=session.id, role="user", content=payload.content.strip())
+        Message(session_id=session.id, role="user", content=content)
     )
     db.commit()
     history = build_history(session.messages, settings.history_window)
@@ -458,6 +575,8 @@ def post_message_stream(
         goal=session.goal,
         recap=recap,
         project_context=project_context,
+        references=turn["references"],
+        turn_notes=turn["turn_notes"],
     )
 
     def event_stream():
@@ -508,6 +627,7 @@ def post_message_stream(
                 provider=provider,
                 is_hint=False,
                 usage=meta_usage,
+                sources=turn["cites"],
             )
         except Exception:
             db.rollback()
@@ -532,6 +652,7 @@ def post_message_stream(
                 "message_id": message.id,
                 "provider": provider,
                 "usage": usage_info.model_dump() if usage_info else None,
+                "sources": turn["cites"],
             },
         )
 
@@ -553,6 +674,7 @@ def request_hint(
     db: DbSession = Depends(deps.get_db),
     user: User | None = Depends(deps.get_optional_user),
     manager: LLMManager = Depends(deps.get_llm_manager),
+    payload: HintRequest | None = None,
 ):
     settings = request.app.state.settings
     session = _load_session(
@@ -564,6 +686,10 @@ def request_hint(
             status_code=403,
             detail="No hints left in this session. Reason it out.",
         )
+    hint_code = (payload.code if payload and payload.code else "").strip() or None
+    turn = _prepare_turn(
+        db, session, "I am stuck. Give me a hint, not the answer.", hint_code
+    )
     db.add(
         Message(
             session_id=session.id,
@@ -581,6 +707,8 @@ def request_hint(
         goal=session.goal,
         recap=recap,
         project_context=project_context,
+        references=turn["references"],
+        turn_notes=turn["turn_notes"],
     )
     response, _ = _mentor_reply(
         db=db,
@@ -591,6 +719,9 @@ def request_hint(
         system=system,
         history=history,
         is_hint=True,
+        intent=turn["intent"],
+        previous_question=turn["previous_question"],
+        sources=turn["cites"],
     )
     session.hints_used += 1
     db.add(Hint(session_id=session.id, content=response.reply))
@@ -618,11 +749,19 @@ def submit_explanation(
         db, session_id, user=user, guest_token=guest_token_from(request)
     )
     _require_active(session)
+    explanation = payload.explanation.strip()
+    if not explanation:
+        raise HTTPException(
+            status_code=422,
+            detail="Explanation must not be empty.",
+        )
+    if payload.code and payload.code.strip() and payload.code.strip() != session.code:
+        session.code = payload.code.strip()[:8000]
     db.add(
         Message(
             session_id=session.id,
             role="user",
-            content=f"My explanation of the fix: {payload.explanation.strip()}",
+            content=f"My explanation of the fix: {explanation}",
         )
     )
     db.commit()

@@ -89,19 +89,44 @@ class SessionCreate(BaseModel):
     code: str = Field(min_length=1, max_length=8000)
     goal: Literal["debug", "review", "explain"] = "debug"
     project_id: Optional[str] = None
+    mode: Literal["practice", "mycode"] = "practice"
 
 
 class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
+    # Optional editor snapshot: when present and different, the session's
+    # stored code is updated BEFORE this turn is generated.
+    code: Optional[str] = Field(default=None, max_length=8000)
+
+
+class HintRequest(BaseModel):
+    # Optional editor snapshot, same semantics as MessageCreate.code.
+    code: Optional[str] = Field(default=None, max_length=8000)
 
 
 class ExplainRequest(BaseModel):
     explanation: str = Field(min_length=1, max_length=4000)
+    code: Optional[str] = Field(default=None, max_length=8000)
 
 
 class MisconceptionIn(BaseModel):
     type: str = Field(min_length=1, max_length=64)
     description: str = Field(min_length=1, max_length=500)
+
+
+class EvaluationOut(BaseModel):
+    """Structured assessment of the student's latest message.
+
+    Internal orchestration contract: validated, stored in message meta,
+    and used for anti-repetition. Not a grade shown to the student.
+    """
+
+    verdict: Literal[
+        "correct", "partially_correct", "incorrect",
+        "off_target", "unclear", "greeting",
+    ] = "unclear"
+    assessed_reasoning: str = Field(default="", max_length=1000)
+    missing_concept: str = Field(default="", max_length=500)
 
 
 def _clamp_score(value) -> int:
@@ -118,6 +143,7 @@ class MentorFeedback(BaseModel):
     understanding_score: int = 0
     misconception: Optional[MisconceptionIn] = None
     next_topics: list[str] = Field(default_factory=list)
+    evaluation: Optional[EvaluationOut] = None
 
     _clamp = field_validator("understanding_score", mode="before")(_clamp_score)
 
@@ -147,6 +173,11 @@ class BadgeResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SourceRef(BaseModel):
+    title: str
+    url: str
+
+
 class MisconceptionOut(BaseModel):
     type: str
     description: str
@@ -173,6 +204,7 @@ class SessionBase(BaseModel):
     language: str
     goal: str = "debug"
     project_id: Optional[str] = None
+    mode: str = "practice"
     code: str
     status: str
     understanding_score: int
@@ -199,6 +231,7 @@ class MentorMessageResponse(BaseModel):
     message_id: str
     provider: str
     usage: Optional[UsageInfo] = None
+    sources: list[SourceRef] = Field(default_factory=list)
 
 
 class ExplainResponse(BaseModel):
@@ -453,6 +486,7 @@ class DocSimplifyResponse(BaseModel):
     explanation: str
     example: str
     question: str
+    sources: list[SourceRef] = Field(default_factory=list)
     created_at: datetime
 
 

@@ -98,6 +98,7 @@ class Session(Base):
     )
     language: Mapped[str] = mapped_column(String(32), default="python")
     goal: Mapped[str] = mapped_column(String(20), default="debug")
+    mode: Mapped[str] = mapped_column(String(20), default="practice")
     project_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("projects.id"), nullable=True, index=True
     )

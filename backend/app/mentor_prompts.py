@@ -72,6 +72,9 @@ HARD RULES (never break these):
    small talk, or confusion), greet them warmly in one short sentence, then
    restate the current guiding question in fresh words and invite them to
    try. Never repeat a previous reply verbatim.
+9. If approved references are listed below, ground your guidance in them
+   where relevant. Cite them by title only when you actually used them.
+   Never invent URLs, titles, or documentation that is not listed.
 
 STYLE: warm, concise, curious. Maximum 80 words. Plain text only.\
 """
@@ -102,13 +105,18 @@ def _language_block(language: str) -> str:
 
 def chat_system_prompt(
     *, language: str, code: str, hints_left: int, goal: str = "debug",
-    recap: str = "", project_context: str = "",
+    recap: str = "", project_context: str = "", references: str = "",
+    turn_notes: str = "",
 ) -> str:
     extra = ""
     if recap.strip():
         extra += "\n\n" + recap.strip()
     if project_context.strip():
         extra += "\n\n" + project_context.strip()
+    if references.strip():
+        extra += "\n\n" + references.strip()
+    if turn_notes.strip():
+        extra += "\n\n" + turn_notes.strip()
     return (
         _goal_block(goal)
         + "\n\n"
@@ -126,22 +134,35 @@ def chat_system_prompt(
         + '  "understanding_score": <integer 0-100>,\n'
         + '  "misconception": {"type": "<one of the listed types>", '
         + '"description": "<one line>"} or null,\n'
+        + '  "evaluation": {"verdict": "<correct|partially_correct|incorrect|'
+        + 'off_target|unclear|greeting>", '
+        + '"assessed_reasoning": "<what the student actually showed>", '
+        + '"missing_concept": "<what is still missing, or empty>"},\n'
         + '  "next_topics": ["<topic>", "<topic>", "<topic>"]\n}'
         + "\n\nunderstanding_score rates the understanding the student has "
         + "demonstrated so far (0 = no clue yet, 100 = explained the root "
-        + "cause and the fix clearly in their own words)."
+        + "cause and the fix clearly in their own words). The evaluation "
+        + "verdict must honestly reflect the student's LATEST message "
+        + "against the question you previously asked: use partially_correct "
+        + "when only part is right and name the missing piece; use greeting "
+        + "for greetings, off_target for unrelated messages."
     )
 
 
 def stream_system_prompt(
     *, language: str, code: str, hints_left: int, goal: str = "debug",
-    recap: str = "", project_context: str = "",
+    recap: str = "", project_context: str = "", references: str = "",
+    turn_notes: str = "",
 ) -> str:
     extra = ""
     if recap.strip():
         extra += "\n\n" + recap.strip()
     if project_context.strip():
         extra += "\n\n" + project_context.strip()
+    if references.strip():
+        extra += "\n\n" + references.strip()
+    if turn_notes.strip():
+        extra += "\n\n" + turn_notes.strip()
     return (
         _goal_block(goal)
         + "\n\n"
@@ -166,6 +187,9 @@ def meta_system_prompt() -> str:
         + '  "misconception": {"type": "<one of: '
         + _TYPE_LIST
         + '>", "description": "<one line>"} or null,\n'
+        + '  "evaluation": {"verdict": "<correct|partially_correct|incorrect|'
+        + 'off_target|unclear|greeting>", "assessed_reasoning": "<one line>", '
+        + '"missing_concept": "<one line or empty>"},\n'
         + '  "next_topics": ["<topic>", "<topic>", "<topic>"]\n}'
         + "\n\nunderstanding_score rates the understanding demonstrated so far. "
         + "misconception is the single most important false belief the student "
@@ -176,13 +200,18 @@ def meta_system_prompt() -> str:
 
 def hint_system_prompt(
     *, language: str, code: str, hints_left: int, goal: str = "debug",
-    recap: str = "", project_context: str = "",
+    recap: str = "", project_context: str = "", references: str = "",
+    turn_notes: str = "",
 ) -> str:
     extra = ""
     if recap.strip():
         extra += "\n\n" + recap.strip()
     if project_context.strip():
         extra += "\n\n" + project_context.strip()
+    if references.strip():
+        extra += "\n\n" + references.strip()
+    if turn_notes.strip():
+        extra += "\n\n" + turn_notes.strip()
     return (
         _goal_block(goal)
         + "\n\n"
@@ -200,6 +229,9 @@ def hint_system_prompt(
         + '{\n  "reply": "the hint plus one question",\n'
         + '  "understanding_score": <integer 0-100>,\n'
         + '  "misconception": null,\n'
+        + '  "evaluation": {"verdict": "<correct|partially_correct|incorrect|'
+        + 'off_target|unclear|greeting>", "assessed_reasoning": "<one line>", '
+        + '"missing_concept": "<one line or empty>"},\n'
         + '  "next_topics": ["<topic>", "<topic>", "<topic>"]\n}'
     )
 
@@ -251,7 +283,9 @@ def simplify_system_prompt(*, language: str) -> str:
         "concrete example that stays faithful to the source. List important "
         "caveats that appear in (or directly follow from) the source. Never "
         "invent facts, signatures, or behavior the source does not state; "
-        "when something is unclear, say so instead of guessing.\n\n"
+        "when something is unclear, say so instead of guessing. If approved "
+        "references are listed below, you may ground your explanation in "
+        "them; never invent other sources.\n\n"
         "OUTPUT FORMAT (strict): reply with ONLY one valid JSON object, "
         "no prose before or after it:\n"
         + '{\n  "explanation": "<plain-language explanation>",\n'

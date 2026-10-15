@@ -19,7 +19,9 @@ from app.schemas import (
     DocHistoryItem,
     DocSimplifyRequest,
     DocSimplifyResponse,
+    SourceRef,
 )
+from app.services.knowledge import citations, format_references, retrieve
 from app.services.mentor import extract_json_dict
 
 
@@ -44,9 +46,14 @@ def simplify(
     user: User = Depends(deps.get_current_user),
     manager: LLMManager = Depends(deps.get_llm_manager),
 ):
+    language = payload.language.strip()
+    cards = retrieve(language, payload.text.strip(), top_k=2)
+    system = simplify_system_prompt(language=language)
+    if cards:
+        system += "\n\n" + format_references(cards)
     try:
         completion, _ = manager.complete(
-            system=simplify_system_prompt(language=payload.language.strip()),
+            system=system,
             messages=[{"role": "user", "content": payload.text.strip()}],
             temperature=0.3,
         )
@@ -76,6 +83,9 @@ def simplify(
         explanation=record.explanation,
         example=record.example,
         question=record.question,
+        sources=[
+            SourceRef(title=c["title"], url=c["url"]) for c in citations(cards)
+        ],
         created_at=record.created_at,
     )
 
