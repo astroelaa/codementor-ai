@@ -82,7 +82,11 @@ aurora wash (violet/indigo/cyan, reduced-motion static, pointer-transparent).
 **State.** TanStack Query for server data (5-min stale, no refetch on focus);
 local `useState` for chat/drafts; `localStorage` for JWT (`cm_token`), guest
 token (`cm_guest`), theme (`cm-theme`). Auth context restores the session via
-`GET /api/auth/me`.
+`GET /api/auth/me`. API base URL: `VITE_API_BASE_URL` (canonical,
+`VITE_API_URL` legacy fallback); local `vite dev` defaults to
+`http://127.0.0.1:8000`, while production builds fail fast with an explicit
+"backend not configured" error instead of silently calling localhost
+(`API_MISCONFIGURED` banner + guarded session start).
 
 **Design system** (`index.css`): near-black `#0A0A0F`, surface `#12121A`,
 violet `#7C5CFF`, thin borders; Inter UI, Times New Roman display/serif body,

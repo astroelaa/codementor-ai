@@ -29,6 +29,7 @@ import { LANGUAGES, guessLanguage } from "../lib/detect";
 import {
   ApiError,
   api,
+  API_MISCONFIGURED,
   streamMessage,
   tokenStore,
   type Badge,
@@ -267,6 +268,10 @@ export function Workspace() {
   }
 
   async function start() {
+    if (API_MISCONFIGURED) {
+      toast("error", "The app is not connected to its backend (API URL is not configured).");
+      return;
+    }
     if (!code.trim()) {
       toast("info", "Paste your code first — or load a sample snippet.");
       return;
@@ -457,6 +462,11 @@ export function Workspace() {
 
       {!guestCapped && (
         <div className="mt-6 grid items-start gap-5 lg:grid-cols-[1.1fr_1fr] xl:grid-cols-[1fr_1fr_280px]">
+          {API_MISCONFIGURED && (
+            <div className="card flex flex-wrap items-center gap-3 border-(--danger) px-5 py-3.5 text-sm lg:col-span-2 xl:col-span-3" role="alert">
+              <span className="text-(--danger)">Backend not configured — the mentor cannot reach its API. Set <span className="font-mono">VITE_API_BASE_URL</span> and rebuild.</span>
+            </div>
+          )}
           {serverUnreachable && (
             <div className="card flex flex-wrap items-center gap-3 border-(--warning) px-5 py-3.5 text-sm lg:col-span-2 xl:col-span-3" role="status">
               <Loader2 size={16} strokeWidth={1.5} className="animate-spin text-(--warning)" />

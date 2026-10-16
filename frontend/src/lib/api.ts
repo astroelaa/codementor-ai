@@ -1,9 +1,23 @@
 /* Typed client for the CodeMentor AI backend. */
 
-export const API_BASE =
+/* Canonical variable is VITE_API_BASE_URL (see frontend/.env.example and
+   .github/workflows/pages.yml); VITE_API_URL is a legacy fallback.
+   Local dev (vite) falls back to the local backend. Production builds NEVER
+   fall back to localhost: with no URL configured every request fails fast
+   with a clear configuration error instead of pretending the API works. */
+const CONFIGURED_BASE =
   (import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/$/, "") ||
-  (import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "") ||
-  "http://127.0.0.1:8000";
+  (import.meta.env.VITE_API_URL || "").trim().replace(/\/$/, "");
+
+export const API_BASE =
+  CONFIGURED_BASE || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "");
+
+/** True in production builds with no backend URL configured. */
+export const API_MISCONFIGURED = API_BASE === "";
+
+const MISCONFIGURED_DETAIL =
+  "The app is not connected to its backend (API URL is not configured). " +
+  "If you deploy this yourself, set VITE_API_BASE_URL and rebuild.";
 
 const TOKEN_KEY = "cm_token";
 const GUEST_KEY = "cm_guest";
@@ -249,6 +263,7 @@ function headers(extra: Record<string, string> = {}): Record<string, string> {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  if (!API_BASE) throw new ApiError(0, MISCONFIGURED_DETAIL);
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: headers(init.headers as Record<string, string> | undefined),
@@ -506,6 +521,10 @@ export async function* streamMessage(
   code?: string,
   signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
+  if (!API_BASE) {
+    yield { kind: "error", detail: MISCONFIGURED_DETAIL };
+    return;
+  }
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/api/sessions/${sessionId}/messages/stream`, {
