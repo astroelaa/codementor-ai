@@ -11,6 +11,9 @@ on:
     paths:
       - "frontend/**"
       - ".github/workflows/pages.yml"
+  # Manual redeploy (e.g. after changing the VITE_API_BASE_URL variable,
+  # which alone does not trigger a push build).
+  workflow_dispatch:
 
 permissions:
   contents: read
