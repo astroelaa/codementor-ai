@@ -114,6 +114,16 @@ def build_backend(settings: Settings) -> EmailBackend:
     return ConsoleEmailBackend()
 
 
+def is_delivery_configured(settings: Settings) -> bool:
+    """True only when the configured provider can actually deliver mail."""
+    provider = settings.email_provider.strip().lower()
+    if provider == "smtp":
+        return bool(settings.email_smtp_host)
+    if provider == "resend":
+        return bool(settings.resend_api_key)
+    return False  # console and anything unknown only log
+
+
 def get_email_backend(request: Request) -> EmailBackend:
     backend = getattr(request.app.state, "email_backend", None)
     if backend is None:

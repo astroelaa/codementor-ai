@@ -13,6 +13,7 @@ from app.services.email import (
     ResendEmailBackend,
     build_backend,
     get_email_backend,
+    is_delivery_configured,
 )
 from tests.conftest import auth_headers, client, make_user
 
@@ -107,3 +108,29 @@ def test_provider_failure_signup_still_201_but_resend_502():
         assert r.status_code == 502, r.text
     finally:
         _teardown()
+
+
+def test_resend_console_provider_reports_not_configured():
+    # No backend override: the default console provider sends nothing, so
+    # resend must say so instead of claiming success.
+    _teardown()
+    user, password = make_user(client)
+    headers = auth_headers(client, user["email"], password)
+    r = client.post("/api/auth/resend-verification", headers=headers)
+    assert r.status_code == 501, r.text
+    assert "not configured" in r.json()["detail"]
+
+
+def test_health_reports_email_delivery_flag():
+    r = client.get("/health")
+    assert r.status_code == 200, r.text
+    # Conftest settings use the console default: nothing really sends.
+    assert r.json()["email_delivery"] is False
+
+
+def test_is_delivery_configured_cases():
+    assert is_delivery_configured(Settings(email_provider="console")) is False
+    assert is_delivery_configured(Settings(email_provider="resend", resend_api_key="k")) is True
+    assert is_delivery_configured(Settings(email_provider="resend")) is False
+    assert is_delivery_configured(Settings(email_provider="smtp", email_smtp_host="h")) is True
+    assert is_delivery_configured(Settings(email_provider="smtp")) is False

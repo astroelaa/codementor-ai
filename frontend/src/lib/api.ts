@@ -503,7 +503,7 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
-  health(): Promise<{ status: string; providers_configured: string[] }> {
+  health(): Promise<{ status: string; environment: string; providers_configured: string[]; email_delivery: boolean }> {
     return request("/health");
   },
 };

@@ -29,6 +29,7 @@ from app.security import (
     verify_password,
 )
 from app.services.email import (
+    ConsoleEmailBackend,
     EmailBackend,
     get_email_backend,
     password_changed_email,
@@ -211,6 +212,11 @@ def resend_verification(
 ):
     if user.is_verified:
         return MessageResponse(message="Email already verified.")
+    if isinstance(mailer, ConsoleEmailBackend):
+        raise HTTPException(
+            status_code=501,
+            detail="Email delivery is not configured on this server. Contact support.",
+        )
     recent = (
         db.query(AuthToken)
         .filter(

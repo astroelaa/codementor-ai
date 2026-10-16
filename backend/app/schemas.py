@@ -256,6 +256,7 @@ class HealthResponse(BaseModel):
     status: str
     environment: str
     providers_configured: list[str]
+    email_delivery: bool = False
 
 
 # --- Language registry ------------------------------------------------------

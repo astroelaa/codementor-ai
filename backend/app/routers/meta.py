@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from app import deps
 from app.schemas import HealthResponse, LanguageInfoResponse, SnippetResponse
+from app.services.email import is_delivery_configured
 from app.services.languages import LANGUAGES
 from app.services.snippets import SAMPLE_SNIPPETS
 
@@ -22,6 +23,7 @@ def health(request: Request):
         environment=settings.environment,
         # Provider names only. Keys are never exposed by any endpoint.
         providers_configured=manager.configured_names,
+        email_delivery=is_delivery_configured(settings),
     )
 
 
