@@ -3,8 +3,16 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { defineConfig } from "vite";
 
+// Base path is env-driven: GitHub Pages serves the app under
+// /codementor-ai/, while Vercel serves it at the domain root.
+// Set VITE_BASE_PATH=/ for the Vercel build; Pages keeps working
+// with the default because the variable is unset there.
+const rawBase = process.env.VITE_BASE_PATH || "/codementor-ai/";
+const BASE = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
+
 // base '/codementor-ai/' + HashRouter: built assets resolve under the
 // GitHub Pages project URL https://astroelaa.github.io/codementor-ai/.
+// (HashRouter means no SPA rewrites are needed on any host.)
 export default defineConfig({
   plugins: [
     react(),
@@ -23,8 +31,8 @@ export default defineConfig({
         theme_color: "#0A0A0F",
         background_color: "#0A0A0F",
         display: "standalone",
-        scope: "/codementor-ai/",
-        start_url: "/codementor-ai/#/",
+        scope: BASE,
+        start_url: `${BASE}#/`,
         icons: [
           {
             src: "icons/icon-192.png",
@@ -47,7 +55,7 @@ export default defineConfig({
       workbox: {
         // App shell is precached. API traffic is NEVER cached: no tokens,
         // no private conversations, no cross-user leaks through the cache.
-        navigateFallback: "/codementor-ai/index.html",
+        navigateFallback: `${BASE}index.html`,
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
@@ -66,7 +74,7 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
-  base: "/codementor-ai/",
+  base: BASE,
   server: { port: 5173, host: "127.0.0.1" },
   preview: { port: 4173, host: "127.0.0.1" },
   build: {

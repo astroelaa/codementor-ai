@@ -34,3 +34,7 @@ Thumbs.db
 
 # ---- Logs ----
 *.log
+
+# ---- Vercel CLI links (contain project IDs; never commit) ----
+.vercel/
+frontend/.vercel/
