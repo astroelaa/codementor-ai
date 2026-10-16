@@ -244,6 +244,9 @@ export interface User {
   is_verified: boolean;
   notify_security_emails: boolean;
   notify_progress_emails: boolean;
+  preferred_language: string;
+  experience_level: string;
+  learning_goal: string;
   created_at: string;
 }
 
@@ -304,10 +307,25 @@ export const api = {
   me(): Promise<User> {
     return request<User>("/api/auth/me");
   },
-  updateProfile(patch: { display_name?: string; theme?: string }): Promise<User> {
+  updateProfile(patch: {
+    display_name?: string;
+    theme?: string;
+    preferred_language?: string;
+    experience_level?: string;
+    learning_goal?: string;
+  }): Promise<User> {
     return request<User>("/api/auth/me", {
       method: "PATCH",
       body: JSON.stringify(patch),
+    });
+  },
+  changePassword(current_password: string, new_password: string): Promise<string> {
+    return request<{ access_token: string }>("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password, new_password }),
+    }).then((d) => {
+      tokenStore.token = d.access_token;
+      return d.access_token;
     });
   },
   deleteAccount(password: string): Promise<void> {

@@ -1,7 +1,16 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, CheckCheck, LogOut, Menu, Moon, Sun, X } from "lucide-react";
+import {
+  Bell,
+  CheckCheck,
+  ChevronDown,
+  Menu,
+  Moon,
+  Sun,
+  User as UserIcon,
+  X,
+} from "lucide-react";
 import { AnchorLink } from "./AnchorLink";
 import { Logo } from "./Logo";
 import { api } from "../lib/api";
@@ -24,8 +33,28 @@ export function Navbar() {
   const { theme, toggle } = useTheme();
   const [open, setOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setAccountOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [accountOpen]);
 
   const unread = useQuery({
     queryKey: ["notifications-unread"],
@@ -142,21 +171,59 @@ export function Navbar() {
                   </div>
                 )}
               </div>
-              <span className="hidden max-w-36 truncate text-sm text-(--muted) sm:block">
-                {user.display_name || user.email}
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  logout();
-                  navigate("/");
-                }}
-                className="btn btn-ghost btn-sm"
-                aria-label="Log out"
-              >
-                <LogOut size={15} strokeWidth={1.5} />
-                <span className="hidden sm:inline">Log out</span>
-              </button>
+              <div className="relative" ref={accountRef}>
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen((o) => !o)}
+                  aria-label="Account menu"
+                  aria-expanded={accountOpen}
+                  className="flex max-w-40 items-center gap-1 rounded-[10px] border border-(--border) px-2.5 py-2 text-sm text-(--muted) transition-colors hover:text-(--text)"
+                >
+                  <UserIcon size={15} strokeWidth={1.5} aria-hidden />
+                  <span className="hidden max-w-24 truncate sm:inline">
+                    {user.display_name || user.email}
+                  </span>
+                  <ChevronDown
+                    size={13}
+                    strokeWidth={1.5}
+                    className={`shrink-0 transition-transform ${accountOpen ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </button>
+                {accountOpen && (
+                  <div
+                    className="card absolute right-0 top-11 z-[90] w-56 p-2"
+                    role="dialog"
+                    aria-label="Account"
+                  >
+                    <NavLink
+                      to="/profile"
+                      onClick={() => setAccountOpen(false)}
+                      className="block rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-colors hover:bg-(--surface-2)"
+                    >
+                      Profile & settings
+                    </NavLink>
+                    <NavLink
+                      to="/dashboard"
+                      onClick={() => setAccountOpen(false)}
+                      className="block rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-colors hover:bg-(--surface-2)"
+                    >
+                      Dashboard
+                    </NavLink>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccountOpen(false);
+                        logout();
+                        navigate("/");
+                      }}
+                      className="block w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold text-(--muted) transition-colors hover:bg-(--surface-2)"
+                    >
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <>
@@ -201,6 +268,28 @@ export function Navbar() {
               {l.label}
             </AnchorLink>
           ))}
+          {user && (
+            <>
+              <NavLink
+                to="/profile"
+                onClick={() => setOpen(false)}
+                className="block py-2.5 text-[15px]"
+              >
+                Profile & settings
+              </NavLink>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  logout();
+                  navigate("/");
+                }}
+                className="block w-full py-2.5 text-left text-[15px] text-(--muted)"
+              >
+                Log out
+              </button>
+            </>
+          )}
           {!user && (
             <Link to="/login" onClick={() => setOpen(false)} className="block py-2.5 text-[15px]">
               Log in

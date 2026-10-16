@@ -52,9 +52,16 @@ class UserResponse(BaseModel):
     is_verified: bool = False
     notify_security_emails: bool = True
     notify_progress_emails: bool = False
+    preferred_language: str = ""
+    experience_level: str = ""
+    learning_goal: str = ""
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+EXPERIENCE_LEVELS = ("beginner", "intermediate", "advanced")
+LEARNING_GOALS = ("debugging", "projects", "interviews", "exams", "concepts")
 
 
 class UpdateProfileRequest(BaseModel):
@@ -62,6 +69,15 @@ class UpdateProfileRequest(BaseModel):
     theme: Optional[str] = Field(default=None, pattern="^(dark|light)$")
     notify_security_emails: Optional[bool] = None
     notify_progress_emails: Optional[bool] = None
+    # "" = not chosen yet; otherwise one of the known registry values.
+    preferred_language: Optional[str] = Field(default=None, max_length=32)
+    experience_level: Optional[str] = Field(default=None, max_length=20)
+    learning_goal: Optional[str] = Field(default=None, max_length=32)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 # --- Mentor ---------------------------------------------------------------

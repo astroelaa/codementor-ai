@@ -48,6 +48,11 @@ class User(Base):
     token_version: Mapped[int] = mapped_column(Integer, default=0)
     notify_security_emails: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_progress_emails: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Profile-level learning preferences. Empty string = "not chosen yet";
+    # allowed values are validated at the API layer.
+    preferred_language: Mapped[str] = mapped_column(String(32), default="")
+    experience_level: Mapped[str] = mapped_column(String(20), default="")
+    learning_goal: Mapped[str] = mapped_column(String(32), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now
     )

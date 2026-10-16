@@ -12,6 +12,7 @@ type Theme = "dark" | "light";
 
 interface ThemeState {
   theme: Theme;
+  set: (theme: Theme) => void;
   toggle: () => void;
 }
 
@@ -35,7 +36,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     () => setTheme((t) => (t === "dark" ? "light" : "dark")),
     [],
   );
-  const value = useMemo(() => ({ theme, toggle }), [theme, toggle]);
+  const set = useCallback((next: Theme) => setTheme(next), []);
+  const value = useMemo(() => ({ theme, set, toggle }), [theme, set, toggle]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

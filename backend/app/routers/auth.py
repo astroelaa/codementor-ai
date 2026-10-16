@@ -10,7 +10,10 @@ from app import deps
 from app.models import AuthToken, User
 from app.rate_limit import limit
 from app.schemas import (
+    ChangePasswordRequest,
     EmailRequest,
+    EXPERIENCE_LEVELS,
+    LEARNING_GOALS,
     LoginRequest,
     MessageResponse,
     PasswordBody,
@@ -36,6 +39,7 @@ from app.services.email import (
     reset_email,
     verification_email,
 )
+from app.services.languages import supported_keys
 from app.services.notifications import notify
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -118,6 +122,13 @@ def me(user: User = Depends(deps.get_current_user)):
     return user
 
 
+def _valid_language(key: str) -> bool:
+    """True for "" (not chosen) or a registered language key."""
+    if key == "":
+        return True
+    return key in supported_keys()
+
+
 @router.patch("/me", response_model=UserResponse)
 def update_profile(
     payload: UpdateProfileRequest,
@@ -132,6 +143,23 @@ def update_profile(
         user.notify_security_emails = payload.notify_security_emails
     if payload.notify_progress_emails is not None:
         user.notify_progress_emails = payload.notify_progress_emails
+    if payload.preferred_language is not None:
+        if not _valid_language(payload.preferred_language):
+            raise HTTPException(
+                status_code=422,
+                detail="Unknown language. Choose one of the supported languages.",
+            )
+        user.preferred_language = payload.preferred_language
+    if payload.experience_level is not None:
+        if payload.experience_level not in ("", *EXPERIENCE_LEVELS):
+            raise HTTPException(
+                status_code=422, detail="Unsupported experience level."
+            )
+        user.experience_level = payload.experience_level
+    if payload.learning_goal is not None:
+        if payload.learning_goal not in ("", *LEARNING_GOALS):
+            raise HTTPException(status_code=422, detail="Unsupported learning goal.")
+        user.learning_goal = payload.learning_goal
     db.commit()
     db.refresh(user)
     return user
@@ -148,6 +176,40 @@ def delete_account(
     db.delete(user)  # cascades to sessions, messages, badges, activity, ...
     db.commit()
     return None
+
+
+@router.post(
+    "/change-password",
+    response_model=TokenResponse,
+    dependencies=[limit("login")],
+)
+def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    db: DbSession = Depends(deps.get_db),
+    user: User = Depends(deps.get_current_user),
+    mailer: EmailBackend = Depends(get_email_backend),
+):
+    """Rotate the password while logged in.
+
+    Requires the current password (re-authentication). Revokes every other
+    session by bumping token_version, then issues a fresh token for THIS
+    session so the user is not logged out unexpectedly.
+    """
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Wrong current password.")
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(
+            status_code=409, detail="New password must differ from the current one."
+        )
+    user.password_hash = hash_password(payload.new_password)
+    user.token_version = (user.token_version or 0) + 1
+    db.commit()
+    try:
+        mailer.send(password_changed_email(user.email))
+    except Exception:
+        pass  # change already succeeded; the notice is best-effort
+    return _issue_token(user, request)
 
 
 def _now() -> datetime:
