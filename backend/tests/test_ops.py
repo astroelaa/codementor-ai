@@ -87,3 +87,18 @@ def test_default_origins_include_hosted_frontend():
 
     origins = Settings().origins
     assert "https://astroelaa.github.io" in origins
+
+
+def test_engine_pooling_sqlite_and_serverless():
+    from sqlalchemy.pool import NullPool, QueuePool, StaticPool
+
+    from app.database import build_engine
+
+    mem = build_engine("sqlite:///:memory:")
+    assert isinstance(mem.pool, StaticPool)
+    file_db = build_engine("sqlite:///./codementor.db")
+    assert isinstance(file_db.pool, QueuePool)
+    pg = build_engine("postgresql+psycopg2://u:p@h/db")
+    assert isinstance(pg.pool, NullPool)
+    for e in (mem, file_db, pg):
+        e.dispose()

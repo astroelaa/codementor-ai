@@ -280,7 +280,12 @@ Variable for Pages builds.
   Live and verified.
 - Backend: `render.yaml` Blueprint (rootDir `backend`, pip install,
   `alembic upgrade head && uvicorn … $PORT`, `/health`) or
-  `backend/Dockerfile` (`${PORT:-7860}`) for HF Spaces. Not yet deployed.
+  `backend/Dockerfile` (`${PORT:-7860}`) for HF Spaces, or Vercel Hobby
+  (`backend/vercel.json`: Root Directory `backend`, entry `app/main.py`,
+  300s timeout, `iad1` region; `.python-version` pins 3.13). Not yet deployed.
+  DB pooling is serverless-safe (`NullPool` for Postgres; run `alembic
+  upgrade head` against Neon once from any machine with the connection string
+  — Vercel has no startup hook for it).
 - DB: Neon free Postgres + `postgresql+psycopg2://` URL; migrations run at
   container start (single-instance safe).
 - CORS: exact allow-list; production needs `https://astroelaa.github.io`.

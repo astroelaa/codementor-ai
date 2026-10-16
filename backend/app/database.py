@@ -6,7 +6,7 @@ production. SQLAlchemy 2 style, synchronous engine.
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool, StaticPool
 
 
 class Base(DeclarativeBase):
@@ -19,6 +19,12 @@ def build_engine(database_url: str):
         kwargs["connect_args"] = {"check_same_thread": False}
         if ":memory:" in database_url:
             kwargs["poolclass"] = StaticPool
+    else:
+        # Serverless-safe: no persistent pool. Each checkout opens a fresh
+        # connection (use the provider's pooled -pooler endpoint, e.g. Neon
+        # PgBouncer in transaction mode) instead of holding idle connections
+        # across frozen function instances.
+        kwargs["poolclass"] = NullPool
     return create_engine(database_url, **kwargs)
 
 
