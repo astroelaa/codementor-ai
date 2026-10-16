@@ -44,18 +44,19 @@ projects + references. Planned: practice sessions, retrieval evaluation.
 - **Database**: 15 tables (users, sessions, messages, hints, misconceptions,
   skills, skill_progress, learning_paths, path_items, badges, user_badges,
   daily_activity, doc_simplifications, projects, milestones, project_tasks);
-  4 Alembic revisions; migrations run at deploy (`alembic upgrade head`).
+  8 Alembic revisions; migrations run automatically in the Vercel build step.
 - **Progress tracking**: activity rows → streaks; misconceptions → skills;
   solve events → badges; all computed from stored rows, never fabricated.
 - **PWA**: manifest + icons + service worker in `dist/`; API traffic is
   `NetworkOnly`.
-- **Hosting**: Pages (live) + backend host pending (Render Blueprint or HF
-  Spaces Docker) + Neon Postgres pending.
+- **Hosting**: Frontend live on Vercel (`https://codementor-ai.vercel.app`)
+  with a GitHub Pages mirror; backend live on Vercel
+  (`https://codementor-ai-api.vercel.app`); Neon Postgres in production.
 
 ```mermaid
 flowchart LR
-    Browser["React app<br/>(GitHub Pages)"] -->|HTTPS + JWT<br/>or guest token| API["FastAPI<br/>(host pending)"]
-    API --> DB[("Neon Postgres<br/>(pending)")]
+    Browser["React app<br/>(Vercel + GitHub Pages)"] -->|HTTPS + JWT<br/>or guest token| API["FastAPI<br/>(vercel-ai-api)"]
+    API --> DB[("Neon Postgres<br/>(production)")]
     API --> LLM["LLM manager<br/>(fallback chain)"]
     LLM --> G["Groq SDK<br/>(verified live)"]
     LLM --> F["Gemini / OpenAI / Anthropic<br/>(adapters only)"]
@@ -66,7 +67,11 @@ flowchart LR
 **Pages/routes** (`frontend/src/pages/`, lazy-loaded in `main.tsx`):
 `/` Landing, `/app` Workspace, `/projects` Projects, `/dashboard` Dashboard,
 `/history` History + replay, `/docs` Simplifier + references, `/login`,
-`/signup`, `/privacy`, `/terms`. Unknown routes redirect home.
+`/signup`, `/profile` (Profile & settings: display name, email + verification
+state + resend, theme, email notification preferences, preferred language /
+experience level / learning goal, change password, delete account),
+`/verify`, `/forgot`, `/reset`, `/privacy`, `/terms`. Unknown routes redirect
+home.
 
 **Components** (`frontend/src/components/`): Navbar (7 links, hamburger below
 1024px), Footer (4 columns), Logo (inline SVG), AnchorLink (hash-safe),
@@ -148,7 +153,8 @@ marked.
 | POST `/api/auth/verify-email` | no | single-use 24h token → verified | `routers/auth.py` |
 | POST `/api/auth/forgot-password` | no | generic reply + link if account exists | `routers/auth.py` |
 | POST `/api/auth/reset-password` | no | new password + revoke all sessions | `routers/auth.py` |
-| GET/PATCH/DELETE `/api/auth/me` | JWT | profile / delete-all | `routers/auth.py` |
+| GET/PATCH/DELETE `/api/auth/me` | JWT | profile / preferences (display name, theme, email prefs, preferred language, experience level, learning goal) / delete-all | `routers/auth.py` |
+| POST `/api/auth/change-password` | JWT + current password | rotate password; revokes other sessions; fresh token | `routers/auth.py` |
 | POST `/api/sessions` | optional | create (guests: 1 free; `language:auto` detected; `mode: practice\|mycode`; blank code → 422) | `routers/mentor.py` |
 | GET `/api/sessions` | JWT/guest | history list | `routers/mentor.py` |
 | GET `/api/sessions/{id}` | owner | full replay | `routers/mentor.py` |
@@ -227,9 +233,12 @@ delete. Migrations: `64bf…` (schema+seeds), `f4c926f` (path source),
 `8f967aef` (session goal), `3445aae6` (projects/milestones/tasks +
 sessions.project_id, batch-mode FK for SQLite), `567d88…` (email
 verification/tokens), `ef19ab…` (notifications/preferences),
-`dc55a8…` (sessions.mode, default `practice`). Fresh DBs migrate cleanly
-(proven by the test suite, which upgrades scratch DBs). Single head:
-`dc55a8dcae7e`. **Production Postgres: NOT TESTED** (Neon pending) — local + mocked coverage only.
+`dc55a8…` (sessions.mode, default `practice`), `3a1c9d47b802` (user
+learning preferences: `preferred_language`, `experience_level`,
+`learning_goal` with safe `""` defaults). Fresh DBs migrate cleanly
+(proven by the test suite, which upgrades scratch DBs; production Neon is
+migrated and live — verified 2026-10-16/17 by a real profile PATCH round-trip).
+Single head: `3a1c9d47b802`.
 
 ## 9. Projects and milestones
 
@@ -275,42 +284,48 @@ Variable for Pages builds.
 
 ## 12. Deployment
 
-- Frontend: Pages via `.github/workflows/pages.yml` (Node 22, `npm ci`,
-  `tsc+vite build`, `dist/` artifact, base `/codementor-ai/`, HashRouter).
-  Live and verified.
-- Backend: `render.yaml` Blueprint (rootDir `backend`, pip install,
-  `alembic upgrade head && uvicorn … $PORT`, `/health`) or
-  `backend/Dockerfile` (`${PORT:-7860}`) for HF Spaces, or Vercel Hobby
-  (`backend/vercel.json`: Root Directory `backend`, entry `app/main.py`,
-  300s timeout, `iad1` region; `.python-version` pins 3.13). Not yet deployed.
-  DB pooling is serverless-safe (`NullPool` for Postgres; run `alembic
-  upgrade head` against Neon once from any machine with the connection string
-  — Vercel has no startup hook for it).
-- DB: Neon free Postgres + `postgresql+psycopg2://` URL; migrations run at
-  container start (single-instance safe).
-- CORS: exact allow-list; production needs `https://astroelaa.github.io`.
-- CI (`.github/workflows/ci.yml`): backend pytest + frontend build — green.
-- Remaining account steps: `docs/deployment-checklist.md` blocker table.
+- **Frontend**: LIVE — Vercel project `codementor-ai`
+  (`https://codementor-ai.vercel.app`), git-connected to `astroelaa/codementor-ai`
+  branch `main`, Root Directory `frontend`. GitHub Pages
+  (`https://astroelaa.github.io/codementor-ai/`) stays as a public mirror
+  built by `.github/workflows/pages.yml` with the repo variable
+  `VITE_API_BASE_URL`.
+- **Backend**: LIVE — Vercel project `codementor-ai-api`
+  (`https://codementor-ai-api.vercel.app`), Root Directory `backend`,
+  entry `app/main.py`, 300s timeout, `iad1` region, `.python-version` pins
+  3.13. The build step runs the guarded migration runner
+  (`backend/scripts/migrate.py`): pending migrations apply inside the build
+  (where `DATABASE_URL` exists as an env var, never exposed), and redeploys
+  are no-ops when the schema is current. Alternatives documented in the repo:
+  `render.yaml` Blueprint and `backend/Dockerfile` for HF Spaces — neither is
+  in production.
+- **DB**: Neon free Postgres; URL pinned to `postgresql+psycopg2://`
+  (`app.database.normalize_database_url`) and stored only as a Vercel secret.
+- **CORS**: exact allow-list (`codementor-ai.vercel.app`,
+  `astroelaa.github.io`, plus local dev ports).
+- **CI (`.github/workflows/ci.yml`)**: backend pytest + frontend build — green.
 
 ## 13. Testing
 
-- Backend: `python -m pytest -q` from `backend/` — **122 passed** (auth,
-  guest caps, mentor/stream/hints/explain, ownership isolation, dashboard,
-  docs, projects, detection, prompts, usage extractors, ops incl. default
-  Pages CORS origin, no-leak,
+- Backend: `python -m pytest -q` from `backend/` — **144 passed** (auth
+  incl. email verification/resend caps + profile preferences +
+  POST /api/auth/change-password, guest caps, mentor/stream/hints/explain,
+  ownership isolation, dashboard, docs, projects, detection, prompts, usage
+  extractors, ops incl. default Pages CORS origin, no-leak,
   orchestration/intent/anti-repeat/code-snapshots/citations/modes — 29 in
   `test_orchestration.py`). Scratch migrated SQLite DBs; fake LLM (no
-  network). Latest full run green (2026-10-16). Live Groq spot-checks (throwaway dev users,
-  current code, rotated key): partial-answer `average([])` scenario fixed with real
-  citations, greeting/explain/code-update/resume/sources-persistence and
-  streaming all 200 (one transient 502 retried OK).
+  network). Latest full run green (2026-10-17).
 - Frontend: `npm run build` (`tsc --noEmit` + Vite + PWA) — **exit 0**.
   No unit-test runner; browser-verified flows: signup/login, diagnose,
   streaming, hints, solve, resume-after-refresh, project create, dashboard
-  data, history replay, theme toggle — zero console errors.
-- Live provider tests (Groq, throwaway accounts): Socratic turn, Rust turn
-  with measured usage, docs simplify — all HTTP 200 with grounded replies.
-- Integration: CI runs both suites per push; Pages deploy verified live.
+  data, history replay, theme toggle, profile editing — zero console errors.
+- Production end-to-end (2026-10-17, live API): disposable account signup
+  201 → resend-verification 200 → PATCH preferences 200 and persisted →
+  invalid language 422 → change-password 200 (wrong current password 401,
+  old token 401 afterward, login with new password 200) → delete with wrong
+  password 401 → delete with correct password 204 → account gone
+  (login 401). A previous live round proved verification email delivery to
+  a real inbox (user-confirmed).
 
 ## 14. Security
 
@@ -337,9 +352,14 @@ requires a connection (stated in UI).
 
 ## 16. Current blockers and risks
 
-- Neon provisioning + backend host deploy + `VITE_API_BASE_URL` + key
-  rotation: all pending account actions (checklist in §12 docs).
-- Chat-exposed Groq key + tokens: rotate/delete after deploy works.
+- Old Groq key (exposed in chat during early sessions): production already
+  uses the rotated key; deletion of the old key on the Groq dashboard is a
+  user action.
+- `codementor-ai.vercel.app` is currently a deployment alias, not a project
+  domain: after each push the frontend is served at the newest deployment
+  automatically, but the canonical URL needs either a one-time dashboard
+  attach or a re-alias step. Documented in
+  `docs/deployment-checklist.md`.
 - Groq model IDs rot without notice (caused one 404 already); re-check on
   any provider 4xx. No fallback provider live-tested yet.
 - Free tiers sleep (cold starts) and cap usage; rate limits are per-process.
@@ -366,7 +386,7 @@ pip install -r requirements.txt
 copy .env.example .env   # then set GROQ_API_KEY inside backend/.env
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000   # docs at /docs, health at /health
-python -m pytest -q                          # 73 tests, fake LLM, no network
+python -m pytest -q                          # 144 tests, fake LLM, no network
 # frontend (new terminal)
 cd frontend && npm install && npm run dev    # http://127.0.0.1:5173/
 npm run build                                # typecheck + production bundle

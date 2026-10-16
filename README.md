@@ -7,17 +7,28 @@ never shows you the fix: it asks one guiding question at a time, challenges
 your reasoning, works within a budget of 3 hints per session, and closes the
 session only after you explain the fix in your own words.
 
+## Live URLs
+
+| What | URL |
+|------|-----|
+| Frontend (Vercel, production) | <https://codementor-ai.vercel.app> |
+| Backend API (Vercel) | <https://codementor-ai-api.vercel.app> |
+| Frontend (GitHub Pages, public mirror) | <https://astroelaa.github.io/codementor-ai/> |
+| API health | <https://codementor-ai-api.vercel.app/health> |
+| API readiness (checks the real DB) | <https://codementor-ai-api.vercel.app/ready> |
+
 ## How it works
 
 ```mermaid
 flowchart LR
-    UI["React app<br/>(GitHub Pages)"] -->|POST /api/sessions<br/>+ JWT| API["FastAPI<br/>(Render)"]
+    UI["React app<br/>(Vercel + GitHub Pages)"] -->|POST /api/sessions<br/>+ JWT| API["FastAPI<br/>(Vercel)"]
     API --> DB[("PostgreSQL<br/>(Neon)")]
     API --> LLM["LLM manager"]
     LLM --> G["Groq"]
     LLM --> Ge["Gemini"]
     LLM --> O["OpenAI"]
     LLM --> A["Anthropic"]
+    API -->|SMTP TLS:465| MAIL["Gmail (verification mail)"]
 ```
 
 1. The student opens a debugging session (Python or JavaScript) and presses Diagnose.
@@ -43,13 +54,36 @@ flowchart LR
 │   │   ├── services/    # mentor parsing, progress, snippets
 │   │   └── llm/         # provider abstraction + fallback manager
 │   ├── alembic/         # database migrations (badges/skills seeded)
+│   ├── scripts/         # guarded migration runner for the Vercel build step
 │   ├── tests/           # pytest suite (fake LLM, no network)
 │   ├── requirements.txt
 │   ├── .env.example     # documented template (safe to commit)
 │   └── .env             # real secrets (git-ignored, never committed)
-├── render.yaml          # Render Blueprint (repo root, auto-detected)
+├── render.yaml          # Render Blueprint (alternative deploy: repo root)
 └── README.md
 ```
+
+## Deploying to Vercel (current production)
+
+Both projects are Vercel projects connected to `astroelaa/codementor-ai`
+(branch `main`), so pushes to `main` build automatically:
+
+- **Backend** (`codementor-ai-api`): Root Directory `backend`, entry
+  `app/main.py` (`backend/vercel.json`: 300s timeout, `iad1` region). The
+  build step installs requirements and runs the guarded migration runner
+  (`backend/scripts/migrate.py`), so `alembic upgrade head` is applied
+  automatically and no-op-safe on every deploy — no manual migration.
+- **Frontend** (`codementor-ai`): Root Directory `frontend`, Vite build.
+  Env var *name* `VITE_API_BASE_URL` must be set to the backend URL
+  (value is public config, not a secret).
+
+Required backend env var names (Vercel → Settings → Environment Variables):
+`DATABASE_URL` (secret), `JWT_SECRET` (secret), `GROQ_API_KEY` (secret),
+`ENVIRONMENT=production`, `ALLOWED_ORIGINS`, `FRONTEND_URL`,
+`EMAIL_PROVIDER=smtp`, `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT` (**465** —
+implicit TLS/SSL-on-connect; Vercel's egress drops 587 STARTTLS sessions),
+`EMAIL_SMTP_USER`, `EMAIL_SMTP_PASSWORD` (secret), `EMAIL_SENDER`.
+Values live only in the Vercel dashboard — never in the repo.
 
 ## Backend quickstart
 
@@ -83,8 +117,12 @@ uvicorn app.main:app --reload --port 8000
 | `JWT_SECRET` | yes (prod) | dev-only value | Token signing secret |
 | `JWT_EXPIRE_DAYS` | no | `7` | Access token lifetime |
 | `ALLOWED_ORIGINS` | no | localhost Vite ports | CORS allow-list |
-| `ENVIRONMENT` | no | `development` | `production` on Render |
+| `ENVIRONMENT` | no | `development` | `production` on hosts; Vercel sets `production` |
 | `RATE_LIMIT_SIGNUP` / `RATE_LIMIT_LOGIN` / `RATE_LIMIT_MENTOR` | no | `10/m, 10/m, 30/m` | Sliding-window budgets |
+| `EMAIL_PROVIDER` | no | `console` | `smtp` enables real delivery |
+| `EMAIL_SMTP_HOST` / `EMAIL_SMTP_PORT` / `EMAIL_SMTP_USER` / `EMAIL_SMTP_PASSWORD` | smtp only | — | SMTP credentials (password = secret). Gmail: host `smtp.gmail.com`, port **465** (TLS-on-connect) |
+| `EMAIL_SENDER` | smtp only | — | From address (must be the authenticated account for Gmail) |
+| `FRONTEND_URL` | no | — | Base URL used in verification/reset email links |
 
 Switching the AI provider is a config change only: set `LLM_PROVIDER` and the
 matching key. No code changes, no redeploy of logic.
@@ -94,10 +132,15 @@ matching key. No code changes, no redeploy of logic.
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/health` | no | Status + configured providers (names only) |
-| `POST` | `/api/auth/signup` | no | Create account |
+| `POST` | `/api/auth/signup` | no | Create account + send verification email (201) |
 | `POST` | `/api/auth/login` | no | JWT access token |
-| `GET`/`PATCH` | `/api/auth/me` | JWT | Profile, theme |
-| `DELETE` | `/api/auth/me` | JWT + password | Delete account and all data |
+| `GET`/`PATCH` | `/api/auth/me` | JWT | Profile: display name, theme, email prefs; preferred language / experience level / learning goal (saved) |
+| `DELETE` | `/api/auth/me` | JWT + password | Delete account and all data (204) |
+| `POST` | `/api/auth/change-password` | JWT + current password | Rotate password; revokes other sessions; returns a fresh token |
+| `POST` | `/api/auth/resend-verification` | JWT | Resend verify link (3/hour cap; 501 if email unconfigured) |
+| `POST` | `/api/auth/verify-email` | no | Single-use 24h link |
+| `POST` | `/api/auth/forgot-password` | no | Generic reply + reset link if the account exists |
+| `POST` | `/api/auth/reset-password` | no | New password + revokes all sessions |
 | `POST` | `/api/sessions` | optional | New session (guests: 1 free via `X-Guest-Token`) |
 | `GET` | `/api/sessions` | JWT or guest | Session history |
 | `GET` | `/api/sessions/{id}` | owner | Full replay with messages |
@@ -129,9 +172,11 @@ contract stays identical. Set it in the workspace before pressing Diagnose.
 
 ## Tests and CI
 
-- Backend: `python -m pytest -q` from `backend/` (58 tests: auth, mentor flow,
-  streaming, fallback, rate limits, dashboard, docs, ops, no-leak checks).
-  Uses a fake LLM and a migrated scratch SQLite DB — no network, no keys.
+- Backend: `python -m pytest -q` from `backend/` — **144 passing tests**
+  (auth incl. email verification/resend caps + profile/preferences +
+  change-password, mentor flow, streaming, fallback, rate limits, dashboard,
+  docs, projects, detection, prompts, orchestration, ops, no-leak checks).
+  Uses a fake LLM and migrated scratch SQLite DBs — no network, no keys.
 - Frontend: `npm run build` from `frontend/` (`tsc --noEmit` + Vite + PWA).
 - CI (`.github/workflows/ci.yml`) runs both on pushes/PRs touching code.
 - Pages deploy (`.github/workflows/pages.yml`) builds with the public repo
@@ -158,5 +203,6 @@ contract stays identical. Set it in the workspace before pressing Diagnose.
   replay, badges UI, review goals, measured token usage.
 - **Phase 4** (done): typography/layout review pass, responsive fixes,
   PWA support, privacy data-flow docs.
-- **Phase 5** (partial): frontend live on GitHub Pages with CI; backend +
-  database deploy pending account access (Neon + host).
+- **Phase 5** (done): deployed to production — frontend + backend on Vercel,
+  Neon Postgres, SMTP email verification (Gmail, port 465), profile & account
+  settings with learning preferences.

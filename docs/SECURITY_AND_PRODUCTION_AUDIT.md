@@ -1,7 +1,10 @@
 # CodeMentor AI — Security & Production Audit
 
 Audited 2026-10-14 against the code at `main` (74 backend tests green,
-frontend build green). Severity: HIGH / MED / LOW / NOTE.
+frontend build green). Updated 2026-10-17: production is live on Vercel
+(frontend `codementor-ai.vercel.app`, backend `codementor-ai-api.vercel.app`,
+Neon Postgres, Gmail SMTP verification; **144 backend tests green**).
+Severity: HIGH / MED / LOW / NOTE.
 
 ## 1. Authentication and accounts
 
@@ -18,6 +21,13 @@ frontend build green). Severity: HIGH / MED / LOW / NOTE.
   access with banner — no lockouts).
 - Password recovery: **IMPLEMENTED** (generic responses, 1h single-use
   tokens, old sessions revoked, `#/forgot` + `#/reset` pages).
+- Logged-in password change: **IMPLEMENTED** (`POST /api/auth/change-password`
+  requires the current password, rejects reusing the same password, bumps
+  `token_version` to revoke other sessions, returns a fresh token for the
+  current session; tested 2026-10-17 in production).
+- Account deletion: `DELETE /api/auth/me` re-checks the password and
+  cascades all rows (tested in production 2026-10-17: wrong password 401,
+  correct password 204, post-delete login 401).
 - Guest caps enforced server-side; ownership checks on all nested resources
   (tested, incl. cross-user 404s). **OK.**
 - Login/signup rate-limited (10/min/IP); login error is generic, but signup
@@ -66,6 +76,11 @@ frontend build green). Severity: HIGH / MED / LOW / NOTE.
 
 ## 5. Standing risks
 
-- Chat-exposed Groq key + tokens must be rotated/deleted (user action).
-- Production Postgres + host deploy unverified (account actions pending).
-- Free-tier sleep/quotas; single-process limiter; regex detector heuristics.
+- Old Groq key (exposed in chat) must be deleted on the Groq dashboard —
+  production already runs on the rotated key.
+- In-memory rate limiter is single-process correct; fine on one Vercel
+  instance per request burst, but multi-instance scaling would need a shared
+  store.
+- Free-tier sleep/quotas on Vercel/Neon/Groq.
+- `codementor-ai.vercel.app` is a deployment alias rather than a project
+  domain — cosmetic/ops issue only (documented in deployment-checklist).
