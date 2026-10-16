@@ -24,13 +24,15 @@ class Settings(BaseSettings):
 
     # --- Email (transactional only: verification + password reset) ---------
     # console: prints recipient + subject to stdout (dev). smtp: real
-    # delivery via stdlib smtplib (no new dependencies).
+    # delivery via stdlib smtplib (no new dependencies). resend: real
+    # delivery via the Resend HTTP API (needs RESEND_API_KEY).
     email_provider: str = "console"
     email_sender: str = "CodeMentor AI <noreply@example.com>"
     email_smtp_host: str = ""
     email_smtp_port: int = 587
     email_smtp_user: str = ""
     email_smtp_password: str = ""
+    resend_api_key: str = ""
     frontend_url: str = "https://astroelaa.github.io/codementor-ai"
 
     # Comma-separated browser origins allowed to call this API.

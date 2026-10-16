@@ -62,7 +62,12 @@ def _issue_token(user: User, request: Request) -> TokenResponse:
     status_code=201,
     dependencies=[limit("signup")],
 )
-def signup(payload: SignupRequest, request: Request, db: DbSession = Depends(deps.get_db)):
+def signup(
+    payload: SignupRequest,
+    request: Request,
+    db: DbSession = Depends(deps.get_db),
+    mailer: EmailBackend = Depends(get_email_backend),
+):
     email = payload.email.strip().lower()
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
@@ -74,6 +79,13 @@ def signup(payload: SignupRequest, request: Request, db: DbSession = Depends(dep
     db.add(user)
     db.commit()
     db.refresh(user)
+    raw = _issue_email_token(db, user, "verify_email", VERIFY_TTL)
+    try:
+        mailer.send(
+            verification_email(user.email, _verification_link(request, raw))
+        )
+    except Exception:
+        pass  # signup still succeeds; the banner offers a resend
     notify(
         db,
         user.id,

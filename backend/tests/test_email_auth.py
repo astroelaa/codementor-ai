@@ -23,9 +23,9 @@ def test_verify_flow_success():
 
         r = client.post("/api/auth/resend-verification", headers=headers)
         assert r.status_code == 200, r.text
-        assert len(mem.sent) == 1
-        assert "verify" in mem.sent[0].subject.lower()
-        raw = mem.sent[0].text.split("token=")[1].split()[0]
+        assert len(mem.sent) == 2  # signup email + resend
+        assert "verify" in mem.sent[1].subject.lower()
+        raw = mem.sent[1].text.split("token=")[1].split()[0]
 
         r = client.post("/api/auth/verify-email", json={"token": raw})
         assert r.status_code == 200, r.text
@@ -50,7 +50,9 @@ def test_resend_rate_limited_per_hour():
     try:
         user, password = make_user(client)
         headers = auth_headers(client, user["email"], password)
-        for _ in range(3):
+        # Signup already issued 1 verify token, so 2 resends fit the
+        # 3-per-hour budget and the 3rd is rejected.
+        for _ in range(2):
             assert client.post("/api/auth/resend-verification", headers=headers).status_code == 200
         r = client.post("/api/auth/resend-verification", headers=headers)
         assert r.status_code == 429
@@ -65,8 +67,8 @@ def test_forgot_password_generic_response():
         r = client.post("/api/auth/forgot-password", json={"email": user["email"]})
         assert r.status_code == 200
         assert "If an account exists" in r.json()["message"]
-        assert len(mem.sent) == 1
-        assert "reset" in mem.sent[0].subject.lower()
+        assert len(mem.sent) == 2  # signup verify + reset
+        assert "reset" in mem.sent[1].subject.lower()
 
         # Unknown address: identical response, no email.
         r = client.post(
@@ -74,7 +76,7 @@ def test_forgot_password_generic_response():
         )
         assert r.status_code == 200
         assert "If an account exists" in r.json()["message"]
-        assert len(mem.sent) == 1
+        assert len(mem.sent) == 2
     finally:
         _teardown_override()
 
@@ -87,7 +89,7 @@ def test_reset_password_flow_and_session_revocation():
         assert client.get("/api/auth/me", headers=old_headers).status_code == 200
 
         client.post("/api/auth/forgot-password", json={"email": user["email"]})
-        raw = mem.sent[0].text.split("token=")[1].split()[0]
+        raw = mem.sent[1].text.split("token=")[1].split()[0]
 
         r = client.post(
             "/api/auth/reset-password",

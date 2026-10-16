@@ -16,10 +16,18 @@ export function VerifyBanner() {
     if (busy) return;
     setBusy(true);
     try {
-      const r = await api.resendVerification();
-      toast("success", r.message);
+      // 200 here means the backend's email provider accepted the message.
+      // Anything else (502 send failure, 429 rate limit) throws ApiError.
+      await api.resendVerification();
+      toast("success", "Verification email sent. Check your inbox.");
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.message : "Try again later.");
+      if (err instanceof ApiError && err.status === 429) {
+        toast("error", "Too many requests. Try again later.");
+      } else if (err instanceof ApiError && err.status === 502) {
+        toast("error", "Could not send the email. Try again later.");
+      } else {
+        toast("error", err instanceof ApiError ? err.message : "Try again later.");
+      }
     } finally {
       setBusy(false);
     }

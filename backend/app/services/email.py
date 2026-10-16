@@ -1,12 +1,13 @@
 """Transactional email abstraction (verification + password reset only).
 
-Two backends, no new dependencies:
+Three backends:
 - console: logs recipient + subject to stdout (local dev). Never logs bodies
   containing links/tokens.
 - smtp: real delivery through any SMTP provider via stdlib smtplib.
+- resend: real delivery via the Resend HTTP API (needs RESEND_API_KEY).
 
-All secrets (SMTP credentials) stay server-side. Tests use an in-memory
-backend injected through the FastAPI dependency below.
+All secrets (SMTP credentials, Resend key) stay server-side. Tests use an
+in-memory backend injected through the FastAPI dependency below.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import smtplib
 from dataclasses import dataclass, field
 from email.message import EmailMessage
 
+import httpx
 from fastapi import Request
 
 from app.config import Settings
@@ -72,11 +74,43 @@ class MemoryEmailBackend(EmailBackend):
         self.sent.append(email)
 
 
+class ResendEmailBackend(EmailBackend):
+    """Real delivery through the Resend HTTP API.
+
+    Non-2xx responses raise (via raise_for_status) so callers observe the
+    failure and can map it to a 502 instead of claiming the mail went out.
+    """
+
+    RESEND_URL = "https://api.resend.com/emails"
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    def send(self, email: OutgoingEmail) -> None:
+        response = httpx.post(
+            self.RESEND_URL,
+            headers={"Authorization": f"Bearer {self.settings.resend_api_key}"},
+            json={
+                "from": self.settings.email_sender,
+                "to": [email.to],
+                "subject": email.subject,
+                "text": email.text,
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+
+
 def build_backend(settings: Settings) -> EmailBackend:
-    if settings.email_provider.strip().lower() == "smtp":
+    provider = settings.email_provider.strip().lower()
+    if provider == "smtp":
         if not settings.email_smtp_host:
             raise RuntimeError("EMAIL_SMTP_HOST is required for the smtp provider")
         return SmtpEmailBackend(settings)
+    if provider == "resend":
+        if not settings.resend_api_key:
+            raise RuntimeError("RESEND_API_KEY is required for the resend provider")
+        return ResendEmailBackend(settings)
     return ConsoleEmailBackend()
 
 
