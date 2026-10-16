@@ -91,7 +91,10 @@ class Settings(BaseSettings):
             problems.append("JWT_SECRET still holds the development default")
         elif len(self.jwt_secret) < 32:
             problems.append("JWT_SECRET must be at least 32 characters")
-        if not self.database_url.startswith("postgresql"):
+        if not (
+            self.database_url.startswith("postgresql")
+            or self.database_url.startswith("postgres://")
+        ):
             problems.append(
                 "DATABASE_URL must be PostgreSQL in production "
                 "(SQLite is local-dev only)"

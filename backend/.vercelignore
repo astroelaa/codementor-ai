@@ -1,0 +1,11 @@
+.env
+.env.*
+**/__pycache__
+.pytest_cache
+tests
+.codementor.db
+*.db
+render.yaml
+Dockerfile
+.gitignore
+SESSION_PROGRESS.md

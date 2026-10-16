@@ -9,12 +9,14 @@ from sqlalchemy import create_engine
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.config import get_settings  # noqa: E402
-from app.database import Base  # noqa: E402
+from app.database import Base, normalize_database_url  # noqa: E402
 import app.models  # noqa: E402,F401
 
 config = context.config
 
-url = os.environ.get("DATABASE_URL") or get_settings().database_url
+url = normalize_database_url(
+    os.environ.get("DATABASE_URL") or get_settings().database_url
+)
 config.set_main_option("sqlalchemy.url", url)
 
 target_metadata = Base.metadata

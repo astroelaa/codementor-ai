@@ -13,7 +13,20 @@ class Base(DeclarativeBase):
     pass
 
 
+def normalize_database_url(database_url: str) -> str:
+    """Pin PostgreSQL URLs to the psycopg2 driver we actually install.
+
+    Newer SQLAlchemy releases may default bare ``postgresql://`` to psycopg v3,
+    which is not in requirements.txt. Explicit driver URLs are left untouched.
+    """
+    for prefix in ("postgresql://", "postgres://"):
+        if database_url.startswith(prefix):
+            return "postgresql+psycopg2://" + database_url[len(prefix):]
+    return database_url
+
+
 def build_engine(database_url: str):
+    database_url = normalize_database_url(database_url)
     kwargs: dict = {}
     if database_url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}
