@@ -53,15 +53,30 @@ class SmtpEmailBackend(EmailBackend):
         message["To"] = email.to
         message["Subject"] = email.subject
         message.set_content(email.text)
-        with smtplib.SMTP(
-            self.settings.email_smtp_host, self.settings.email_smtp_port, timeout=20
-        ) as smtp:
-            smtp.starttls()
-            if self.settings.email_smtp_user:
-                smtp.login(
-                    self.settings.email_smtp_user, self.settings.email_smtp_password
-                )
-            smtp.send_message(message)
+        try:
+            with smtplib.SMTP(
+                self.settings.email_smtp_host,
+                self.settings.email_smtp_port,
+                timeout=20,
+            ) as smtp:
+                smtp.starttls()
+                if self.settings.email_smtp_user:
+                    smtp.login(
+                        self.settings.email_smtp_user,
+                        self.settings.email_smtp_password,
+                    )
+                smtp.send_message(message)
+        except Exception as exc:
+            # Server reply codes and status messages are safe to log; they
+            # never contain the password. Callers still get a generic 502.
+            log.error(
+                "email send failed to=%s host=%s class=%s detail=%s",
+                email.to,
+                self.settings.email_smtp_host,
+                type(exc).__name__,
+                str(exc)[:300],
+            )
+            raise
 
 
 class MemoryEmailBackend(EmailBackend):
