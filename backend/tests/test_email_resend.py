@@ -132,5 +132,23 @@ def test_is_delivery_configured_cases():
     assert is_delivery_configured(Settings(email_provider="console")) is False
     assert is_delivery_configured(Settings(email_provider="resend", resend_api_key="k")) is True
     assert is_delivery_configured(Settings(email_provider="resend")) is False
+    # smtp: host always required; password required when a username is set
     assert is_delivery_configured(Settings(email_provider="smtp", email_smtp_host="h")) is True
     assert is_delivery_configured(Settings(email_provider="smtp")) is False
+    assert (
+        is_delivery_configured(
+            Settings(email_provider="smtp", email_smtp_host="h", email_smtp_user="u")
+        )
+        is False
+    )
+    assert (
+        is_delivery_configured(
+            Settings(
+                email_provider="smtp",
+                email_smtp_host="h",
+                email_smtp_user="u",
+                email_smtp_password="pw",
+            )
+        )
+        is True
+    )

@@ -115,10 +115,21 @@ def build_backend(settings: Settings) -> EmailBackend:
 
 
 def is_delivery_configured(settings: Settings) -> bool:
-    """True only when the configured provider can actually deliver mail."""
+    """True when the provider has every credential it needs to send.
+
+    This is a configuration check only — it cannot prove a live send. It
+    exists so /health does not claim delivery when, e.g., the SMTP password
+    is missing. smtp: host required; password required whenever a username
+    is set (authenticated relays). resend: API key required. console and
+    unknown providers never deliver.
+    """
     provider = settings.email_provider.strip().lower()
     if provider == "smtp":
-        return bool(settings.email_smtp_host)
+        if not settings.email_smtp_host:
+            return False
+        if settings.email_smtp_user and not settings.email_smtp_password:
+            return False
+        return True
     if provider == "resend":
         return bool(settings.resend_api_key)
     return False  # console and anything unknown only log
