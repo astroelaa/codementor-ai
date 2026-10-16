@@ -54,18 +54,32 @@ class SmtpEmailBackend(EmailBackend):
         message["Subject"] = email.subject
         message.set_content(email.text)
         try:
-            with smtplib.SMTP(
-                self.settings.email_smtp_host,
-                self.settings.email_smtp_port,
-                timeout=20,
-            ) as smtp:
-                smtp.starttls()
-                if self.settings.email_smtp_user:
-                    smtp.login(
-                        self.settings.email_smtp_user,
-                        self.settings.email_smtp_password,
-                    )
-                smtp.send_message(message)
+            if self.settings.email_smtp_port == 465:
+                # Implicit TLS (SSL-on-connect): no STARTTLS after connect.
+                with smtplib.SMTP_SSL(
+                    self.settings.email_smtp_host,
+                    465,
+                    timeout=20,
+                ) as smtp:
+                    if self.settings.email_smtp_user:
+                        smtp.login(
+                            self.settings.email_smtp_user,
+                            self.settings.email_smtp_password,
+                        )
+                    smtp.send_message(message)
+            else:
+                with smtplib.SMTP(
+                    self.settings.email_smtp_host,
+                    self.settings.email_smtp_port,
+                    timeout=20,
+                ) as smtp:
+                    smtp.starttls()
+                    if self.settings.email_smtp_user:
+                        smtp.login(
+                            self.settings.email_smtp_user,
+                            self.settings.email_smtp_password,
+                        )
+                    smtp.send_message(message)
         except Exception as exc:
             # Server reply codes and status messages are safe to log; they
             # never contain the password. Callers still get a generic 502.
