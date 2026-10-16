@@ -34,11 +34,15 @@ class Settings(BaseSettings):
     frontend_url: str = "https://astroelaa.github.io/codementor-ai"
 
     # Comma-separated browser origins allowed to call this API.
+    # The GitHub Pages frontend origin is included so production works even
+    # if ALLOWED_ORIGINS is not overridden on the host; local Vite ports
+    # keep local development working out of the box.
     allowed_origins: str = (
         "http://localhost:5173,http://127.0.0.1:5173,"
         "http://localhost:4173,http://127.0.0.1:4173,"
         "http://localhost:5500,http://127.0.0.1:5500,"
-        "http://localhost:8080,http://127.0.0.1:8080"
+        "http://localhost:8080,http://127.0.0.1:8080,"
+        "https://astroelaa.github.io"
     )
 
     # --- LLM layer ------------------------------------------------------

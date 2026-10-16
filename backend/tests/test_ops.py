@@ -80,3 +80,10 @@ def test_request_id_header_present_and_echoed():
 
     r = client.get("/health", headers={"X-Request-ID": "test-123"})
     assert r.headers.get("X-Request-ID") == "test-123"
+
+
+def test_default_origins_include_hosted_frontend():
+    from app.config import Settings
+
+    origins = Settings().origins
+    assert "https://astroelaa.github.io" in origins

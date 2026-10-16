@@ -244,8 +244,15 @@ all-fail → 503. Defaults: `openai/gpt-oss-20b`, `gemini-2.0-flash`,
 `gpt-4o-mini`, `claude-3-5-haiku-20241022` (override via `LLM_MODEL` /
 `<NAME>_MODEL`). Timeouts 45s, `max_tokens` 700, no retries inside a
 provider (one attempt, then fallback). Usage recorded only when reported.
-**Tested live: Groq only.** Adapters for the other three are code-complete
+**Tested live: Groq only** (`openai/gpt-oss-20b`, verified 2026-10-16 with
+the rotated key, incl. partial-answer, greeting, code-update, streaming).
+Adapters for the other three are code-complete
 with parser unit tests but have never made a real call.
+**Nemotron Ultra decision (2026-10-16, verified): not available through
+Groq** — live model list has 11 entries, none Nemotron; `openai/gpt-oss-20b`
+stays the configured default. Serving Nemotron Ultra would need a new
+provider (e.g. NVIDIA NIM endpoint + key), which is not implemented —
+say the word if you want it and can supply the key.
 
 ## 11. Environment configuration
 
@@ -278,13 +285,14 @@ Variable for Pages builds.
 
 ## 13. Testing
 
-- Backend: `python -m pytest -q` from `backend/` — **121 passed** (auth,
+- Backend: `python -m pytest -q` from `backend/` — **122 passed** (auth,
   guest caps, mentor/stream/hints/explain, ownership isolation, dashboard,
-  docs, projects, detection, prompts, usage extractors, ops, no-leak,
+  docs, projects, detection, prompts, usage extractors, ops incl. default
+  Pages CORS origin, no-leak,
   orchestration/intent/anti-repeat/code-snapshots/citations/modes — 29 in
   `test_orchestration.py`). Scratch migrated SQLite DBs; fake LLM (no
-  network). Latest full run green. Live Groq spot-checks (throwaway dev user,
-  current code): partial-answer `average([])` scenario fixed with real
+  network). Latest full run green (2026-10-16). Live Groq spot-checks (throwaway dev users,
+  current code, rotated key): partial-answer `average([])` scenario fixed with real
   citations, greeting/explain/code-update/resume/sources-persistence and
   streaming all 200 (one transient 502 retried OK).
 - Frontend: `npm run build` (`tsc --noEmit` + Vite + PWA) — **exit 0**.
