@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pip install -r requirements.txt -q && python scripts/migrate.py",
   "functions": {
     "app/main.py": {
       "maxDuration": 300,
