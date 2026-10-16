@@ -25,6 +25,7 @@ from app.rate_limit import limit
 from app.schemas import (
     BadgeResponse,
     ChatMessageResponse,
+    EvaluationOut,
     ExplainFeedback,
     ExplainRequest,
     ExplainResponse,
@@ -43,8 +44,14 @@ from app.services.detect import detect_language
 from app.services.email import EmailBackend, get_email_backend, solve_congrats_email
 from app.services.knowledge import citations, format_references
 from app.services.memory import build_project_context, build_session_recap
-from app.services.mentor import build_history, extract_json_dict, parse_feedback
+from app.services.mentor import (
+    build_history,
+    complete_with_retry,
+    extract_json_dict,
+    parse_feedback,
+)
 from app.services.orchestration import (
+    RETRY_ELIGIBLE_INTENTS,
     classify_intent,
     extract_code_block,
     is_repeat,
@@ -266,6 +273,24 @@ def _persist_assistant_turn(
     return message, stored_misc
 
 
+def _force_verdict(feedback: MentorFeedback, intent: str) -> None:
+    """Deterministic assessment guards.
+
+    A greeting is NEVER an answer and venting frustration is NEVER a
+    correct solution, no matter what the model claims: the verdicts are
+    forced to the honest values. The verdict is internal orchestration
+    data, not a user-facing grade.
+    """
+    if intent == "greeting":
+        if feedback.evaluation is None:
+            feedback.evaluation = EvaluationOut()
+        feedback.evaluation.verdict = "greeting"
+    elif intent == "frustration":
+        if feedback.evaluation is None:
+            feedback.evaluation = EvaluationOut()
+        feedback.evaluation.verdict = "off_target"
+
+
 def _mentor_reply(
     *,
     db: DbSession,
@@ -284,24 +309,27 @@ def _mentor_reply(
 
     def _complete_once(sys_text: str):
         try:
-            completion, provider = manager.complete(
-                system=sys_text, messages=history, temperature=0.4
+            feedback, completion, provider = complete_with_retry(
+                manager,
+                system=sys_text,
+                messages=history,
+                temperature=0.4,
             )
         except LLMError as exc:
+            if exc.kind == "parse":
+                raise HTTPException(
+                    status_code=502,
+                    detail="The mentor returned an unusable response. Try again.",
+                )
             raise llm_error_to_http(exc)
-        try:
-            return parse_feedback(completion.text), completion, provider
-        except LLMError:
-            raise HTTPException(
-                status_code=502,
-                detail="The mentor returned an unusable response. Try again.",
-            )
+        _force_verdict(feedback, intent)
+        return feedback, completion, provider
 
     feedback, completion, provider = _complete_once(system)
     # Anti-repetition: at most ONE retry with corrective context, never a loop.
     if (
         previous_question
-        and intent in ("answer", "explanation_request", "question")
+        and intent in RETRY_ELIGIBLE_INTENTS
         and is_repeat(feedback.reply, previous_question)
     ):
         nudge = (
@@ -580,26 +608,137 @@ def post_message_stream(
     )
 
     def event_stream():
-        try:
-            provider, chunks = manager.stream(
-                system=system, messages=history, temperature=0.4
+        prev_q = turn["previous_question"]
+        eligible = bool(prev_q and turn["intent"] in RETRY_ELIGIBLE_INTENTS)
+        # Buffer at least enough text to recognise a repeat of the previous
+        # question before the first token is sent to the client.
+        probe_len = min(max(140, len(prev_q or "") + 20), 420)
+        nudge = None
+        if eligible:
+            nudge = (
+                system
+                + "\n\nCORRECTION: your last reply repeated an earlier "
+                + f'question. Your previous question was: "{prev_q.strip()[:300]}" '
+                + "Do not repeat it in the same or reworded form. First "
+                + "evaluate the student's latest message, then ask a "
+                + "DIFFERENT follow-up question, in plain text only (no JSON)."
             )
-        except LLMError as exc:
-            yield _sse("error", {"detail": llm_error_to_http(exc).detail})
+
+        reply_text = ""
+        reason = None
+        for attempt in range(2):
+            # Second attempt reuses the plain system prompt for transient
+            # failures, the corrective nudge for repeat/unusable output.
+            sys_now = system
+            if attempt == 1 and nudge and reason in ("repeat", "unusable"):
+                sys_now = nudge
+            try:
+                provider, chunks = manager.stream(
+                    system=sys_now, messages=history, temperature=0.4
+                )
+            except LLMError as exc:
+                if attempt == 0:
+                    reason = "transient"
+                    continue
+                yield _sse("error", {"detail": llm_error_to_http(exc).detail})
+                return
+            yield _sse("provider", {"provider": provider})
+            buffer = ""
+            mode = None
+            emitted = False
+            reuse_attempt = None
+            try:
+                for chunk in chunks:
+                    buffer += chunk
+                    if mode is None and buffer.strip():
+                        head = buffer.lstrip()[0]
+                        mode = (
+                            "json" if head == "{"
+                            else "fence" if head == "`"
+                            else "text"
+                        )
+                    if mode == "text" and not emitted:
+                        if not eligible:
+                            # No previous question to guard against: stream live.
+                            yield _sse("token", {"text": buffer})
+                            emitted = True
+                        elif len(buffer) >= probe_len:
+                            if (
+                                eligible
+                                and attempt == 0
+                                and is_repeat(buffer, prev_q)
+                            ):
+                                reuse_attempt = "repeat"
+                                break
+                            # Not a repeat (so far): start real streaming.
+                            yield _sse("token", {"text": buffer})
+                            emitted = True
+                    elif mode == "text" and emitted:
+                        yield _sse("token", {"text": chunk})
+                    # json/fence output is buffered silently until the end.
+            except LLMError as exc:
+                yield _sse("error", {"detail": llm_error_to_http(exc).detail})
+                return
+            if reuse_attempt == "repeat":
+                reason = "repeat"
+                continue
+            if mode in ("json", "fence"):
+                # The model answered with the internal JSON envelope (or a
+                # fence we cannot trust). Extract the user-facing reply;
+                # if that fails it counts as an unusable, non-JSON reply.
+                clean = ""
+                try:
+                    data = extract_json_dict(buffer)
+                    if isinstance(data, dict):
+                        clean = str(data.get("reply") or "").strip()[:3000]
+                except LLMError:
+                    clean = ""
+                if not clean:
+                    if attempt == 0:
+                        reason = "unusable"
+                        continue
+                    yield _sse(
+                        "error",
+                        {
+                            "detail": "The mentor returned an unusable "
+                            "response. Try again."
+                        },
+                    )
+                    return
+                if eligible and attempt == 0 and is_repeat(clean, prev_q):
+                    reason = "repeat"
+                    continue
+                reply_text = clean
+                yield _sse("token", {"text": clean})
+            else:
+                if not emitted:
+                    if eligible and attempt == 0 and is_repeat(buffer, prev_q):
+                        reason = "repeat"
+                        continue
+                    if not buffer.strip():
+                        if attempt == 0:
+                            reason = "unusable"
+                            continue
+                        yield _sse(
+                            "error",
+                            {"detail": "The mentor returned an empty response."},
+                        )
+                        return
+                    reply_text = buffer
+                    yield _sse("token", {"text": buffer})
+                else:
+                    reply_text = buffer
+            break
+        if not reply_text:
+            yield _sse(
+                "error",
+                {
+                    "detail": "The mentor returned an unusable response. "
+                    "Try again."
+                },
+            )
             return
-        yield _sse("provider", {"provider": provider})
-        parts: list[str] = []
-        try:
-            for chunk in chunks:
-                parts.append(chunk)
-                yield _sse("token", {"text": chunk})
-        except LLMError as exc:
-            yield _sse("error", {"detail": llm_error_to_http(exc).detail})
-            return
-        reply = "".join(parts).strip()
-        if not reply:
-            yield _sse("error", {"detail": "The mentor returned an empty response."})
-            return
+        reply = reply_text
         try:
             meta_completion, _ = manager.complete(
                 system=meta_system_prompt(),
@@ -618,6 +757,7 @@ def post_message_stream(
                 next_topics=[],
             )
             meta_usage = None
+        _force_verdict(feedback, turn["intent"])
         try:
             message, stored_misc = _persist_assistant_turn(
                 db,
@@ -767,19 +907,25 @@ def submit_explanation(
     db.commit()
     history = build_history(session.messages, settings.history_window)
     system = judge_system_prompt(language=session.language, code=session.code)
+
+    def _parse_judge(raw: str) -> ExplainFeedback:
+        return ExplainFeedback.model_validate(extract_json_dict(raw))
+
     try:
-        completion, provider = manager.complete(
-            system=system, messages=history, temperature=0.0
+        judged, completion, provider = complete_with_retry(
+            manager,
+            system=system,
+            messages=history,
+            temperature=0.0,
+            parse=_parse_judge,
         )
     except LLMError as exc:
+        if exc.kind == "parse":
+            raise HTTPException(
+                status_code=502,
+                detail="The mentor returned an unusable response. Try again.",
+            )
         raise llm_error_to_http(exc)
-    try:
-        judged = ExplainFeedback.model_validate(extract_json_dict(completion.text))
-    except LLMError:
-        raise HTTPException(
-            status_code=502,
-            detail="The mentor returned an unusable response. Try again.",
-        )
 
     reply = judged.feedback.strip()
     if judged.follow_up_question.strip():

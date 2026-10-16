@@ -2,8 +2,9 @@
 
 How a Socratic turn is produced. Source of truth is `backend/app/routers/mentor.py`
 plus `backend/app/services/orchestration.py` and `backend/app/mentor_prompts.py`.
-All claims below are verified by `backend/tests/test_orchestration.py` (27 tests)
-and the full suite (`python -m pytest -q` → 119 passed).
+All claims below are verified by `backend/tests/test_orchestration.py` plus
+`backend/tests/test_mentor_resilience.py` (18 tests) and the full suite
+(`python -m pytest -q` → 162 passed).
 
 ## Flow (one turn)
 
@@ -33,22 +34,36 @@ and the full suite (`python -m pytest -q` → 119 passed).
    `references` + `turn_notes`. Shared hard rules: one suspicious area + one
    question; never show fixed code or fences; acknowledge sound reasoning;
    hints only on request with budget; greeting rule; references grounded-only.
-4. **Generate + validate.** `LLMManager.complete()` tries keyed providers in
-   order, one attempt each, then falls back. `parse_feedback()` extracts the
-   JSON object and `MentorFeedback` (Pydantic) validates it, including the
+4. **Generate + validate.** `complete_with_retry()` (services/mentor.py) calls
+   `LLMManager.complete()` — which tries keyed providers in order, one attempt
+   each — and retries ONCE more on a transient provider error
+   (server/timeout/rate-limit/all-failed) or a non-JSON / schema-invalid model
+   reply, before surfacing the error. `parse_feedback()` extracts the JSON
+   object and `MentorFeedback` (Pydantic) validates it, including the
    `evaluation` object (`verdict`, `assessed_reasoning`, `missing_concept`).
-   Parse failure → HTTP 502. Streaming variant streams prose tokens first,
-   then runs `meta_system_prompt()` to score the turn; the stored reply is
-   the streamed text.
-5. **Anti-repetition (non-streaming only).** If a previous question exists,
-   intent is `answer`/`explanation_request`/`question`, and
-   `is_repeat(new, old)` (normalized similarity ≥ 0.82 or containment of a
-   ≥20-char string) is true, the router retries **exactly once** with a
-   corrective nudge naming the previous question. Bounded: 2 calls on repeat,
-   1 otherwise (tested). Streaming has prompt-level protection only
-   (`turn_notes` carries the do-not-repeat instruction into
-   `stream_system_prompt`); already-emitted tokens cannot be retried, so no
-   second call is made there. See Limitations.
+   Exhausting the retry raises 502 (`config`/`all_failed` → 503 via
+   `llm_error_to_http`). Streaming is different (step 6).
+5. **Assessment guards.** Deterministic verdict overrides: intent `greeting`
+   forces `evaluation.verdict = "greeting"` and intent `frustration` forces
+   `"off_target"` — the model can never assess a hello as a wrong answer or
+   score a vent as a correct solution.
+6. **Streaming resilience.** The stream buffers silently until either
+   (a) a repeat is impossible or detected, or (b) it is safe to emit:
+   - no previous question (nothing to repeat): tokens stream live;
+   - otherwise the first `min(140, len(prev)+20)…420` characters are checked
+     with `is_repeat` against the previous question — a repeat triggers ONE
+     corrective-nudge re-stream before any token reached the client;
+   - output starting with `{` (or a fence) that parses as the JSON envelope
+     has its `reply` field extracted and sent as the clean text (the raw
+     `{"reply": …}` blob never reaches the UI); non-JSON/unextractable output
+     is retried once, then an SSE `error` event is served.
+7. **Anti-repetition (non-streaming).** If a previous question exists, intent
+   is retry-eligible (`answer`/`explanation_request`/`question`/
+   `frustration`), and `is_repeat(new, old)` (normalized similarity ≥ 0.82 or
+   containment of a ≥20-char string) is true, the router retries **exactly
+   once** with a corrective nudge naming the previous question. Streaming
+   enforces the same rule pre-emit (step 6); once tokens were forwarded there
+   is no late retry.
 6. **Persist.** `_persist_assistant_turn()` stores the assistant message with
    `meta = {provider, understanding_score, misconception, hint, usage,
    evaluation, sources}` (sanitized `{title, url}` snapshot of that turn's
@@ -82,7 +97,8 @@ it, add an explicit do-not-repeat rule, and retry once on detected repeat.
 
 | Input example | Intent | Effect |
 |---|---|---|
-| `hello`, `good morning` | greeting | Greeting rule in prompt; no retry |
+| `hello`, `good morning` | greeting | Greeting rule in prompt; verdict forced `greeting`; no retry |
+| `what the hell`, `wtf`, `I give up` | frustration | Acknowledge + fresh re-entry question; verdict forced `off_target`; retry eligible |
 | `give me a hint`, `I'm stuck` | hint_request | Hint-budget rule |
 | `explain this`, `I don't understand` | explanation_request | May explain (≤120 words) + check question; retry eligible |
 | fenced code / 2+ code lines | code_change | Code-updated flag in prompt |
@@ -92,9 +108,13 @@ it, add an explicit do-not-repeat rule, and retry once on detected repeat.
 
 ## Limitations (honest)
 
-- Streaming turns do not retry on repeat (tokens already sent). Protection is
-  prompt-level only. (Verified live: streaming still asks grounded follow-ups;
-  anti-repetition retry remains non-streaming only.)
+- Streaming CAN retry before emitting (repeat/envelope detection window);
+  once tokens were forwarded there is no late retry, and a reply that turns
+  into a repeat only after the probe window (~140–420 chars) is already on
+  the wire.
+- A short reply entirely inside the probe window arrives as one token burst
+  rather than character-by-character — invisible to users, visible to SSE
+  traces.
 - `sources[]` are persisted in `message.meta.sources` and shown on resume
   (`Workspace.tsx`) and replay (`History.tsx`); rows written before this change
   lack the key and read back as `[]`.

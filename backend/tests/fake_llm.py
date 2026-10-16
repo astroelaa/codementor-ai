@@ -3,6 +3,7 @@
 import json
 
 from app.llm.base import Completion
+from app.llm.errors import LLMError
 
 MENTOR_JSON = json.dumps(
     {
@@ -72,8 +73,8 @@ class FakeLLMManager:
     name = "fake"
 
     def __init__(self) -> None:
-        self.complete_scripts: list[str] = []
-        self.stream_scripts: list[list[str]] = []
+        self.complete_scripts: list = []  # str payloads or LLMError instances
+        self.stream_scripts: list = []  # chunk lists or LLMError instances
         self.calls: list[dict] = []
 
     @property
@@ -88,23 +89,44 @@ class FakeLLMManager:
     def queue_complete(self, text: str) -> None:
         self.complete_scripts.append(text)
 
+    def queue_complete_error(self, error: LLMError) -> None:
+        """Queue a raised LLMError for the next complete() call."""
+        self.complete_scripts.append(error)
+
     def queue_stream(self, chunks: list[str]) -> None:
         self.stream_scripts.append(chunks)
 
+    def queue_stream_error(self, error: LLMError) -> None:
+        self.stream_scripts.append(error)
+
     def complete(self, *, system, messages, temperature=0.4):
         self.calls.append(
-            {"kind": "complete", "system_head": system[:60], "turns": len(messages)}
+            {
+                "kind": "complete",
+                "system_head": system[:60],
+                "system": system,
+                "turns": len(messages),
+            }
         )
         if self.complete_scripts:
-            return Completion(self.complete_scripts.pop(0), None), "fake"
+            item = self.complete_scripts.pop(0)
+            if isinstance(item, LLMError):
+                raise item
+            return Completion(item, None), "fake"
         return Completion(MENTOR_JSON, None), "fake"
 
     def stream(self, *, system, messages, temperature=0.4):
         self.calls.append(
-            {"kind": "stream", "system_head": system[:60], "turns": len(messages)}
+            {
+                "kind": "stream",
+                "system_head": system[:60],
+                "system": system,
+                "turns": len(messages),
+            }
         )
         if self.stream_scripts:
-            chunks = self.stream_scripts.pop(0)
-        else:
-            chunks = ["What ", "happens ", "here?"]
-        return "fake", iter(chunks)
+            item = self.stream_scripts.pop(0)
+            if isinstance(item, LLMError):
+                raise item
+            return "fake", iter(item)
+        return "fake", iter(["What ", "happens ", "here?"])

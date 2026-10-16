@@ -30,6 +30,24 @@ GREETING_RES = [
 
 def _is_greeting(stripped: str) -> bool:
     return any(rx.match(stripped) for rx in GREETING_RES)
+FRUSTRATION_RES = [
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"\bwhat the (hell|heck)\b",
+        r"\bwtf\b",
+        r"\b(this|that) (is|makes no sense|sucks)\b.*",
+        r"^i (quit|give up|am done|can'?t do this)\b.*",
+        r"^(stupid|useless|garbage|terrible|awful|horrible|annoying)\b.*",
+        r"\bf[t\*]{2}ing\b",
+        r"\b(screw|forget) (this|it)\b",
+        r"^why (is|doesn'?t) (this|it) (not )?work(ing)?\b.*",
+    )
+]
+
+
+def _is_frustration(stripped: str) -> bool:
+    return any(rx.search(stripped) for rx in FRUSTRATION_RES)
+
 HINT_RE = re.compile(r"\bhint\b|\bclue\b|give me a (hint|clue|help)|i('m| am) stuck", re.IGNORECASE)
 EXPLAIN_RE = re.compile(
     r"\bexplain\b|explain this|what does this (code|function|do)|i don't understand"
@@ -69,14 +87,17 @@ CODE_LINE_RES = [
 def classify_intent(text: str) -> str:
     """Deterministic intent of a student message.
 
-    One of: greeting, hint_request, explanation_request, code_change,
-    question, unclear, answer. Rule order matters (specific first).
+    One of: greeting, frustration, hint_request, explanation_request,
+    code_change, question, unclear, answer. Rule order matters (specific
+    first).
     """
     stripped = (text or "").strip()
     if not stripped or len(re.sub(r"[^\w]", "", stripped)) < 2:
         return "unclear"
     if _is_greeting(stripped):
         return "greeting"
+    if _is_frustration(stripped):
+        return "frustration"
     if HINT_RE.search(stripped):
         return "hint_request"
     if EXPLAIN_RE.search(stripped):
@@ -143,6 +164,13 @@ def retrieve_for_turn(
     return retrieve(language or "", "\n".join(query_parts), top_k=2)
 
 
+# Intents whose reply may be retried once when it repeats the previous
+# question. Greeting/hint/code_change are excluded by design (nothing to
+# re-ask); frustration IS included so a repeated question after venting is
+# corrected too.
+RETRY_ELIGIBLE_INTENTS = ("answer", "explanation_request", "question", "frustration")
+
+
 def turn_context_block(
     *, intent: str, previous_question: str | None, code_updated: bool,
     resources: list[dict],
@@ -151,7 +179,19 @@ def turn_context_block(
     lines = [f"The student's latest message intent is: {intent}."]
     if intent == "greeting":
         lines.append(
-            "It is a greeting, not an answer. Follow the greeting rule."
+            "It is a greeting, not an answer. Follow the greeting rule: "
+            "greet back warmly in one short sentence, then restate the "
+            "current guiding question in FRESH words. Never assess a "
+            "greeting as an answer (verdict is always greeting)."
+        )
+    elif intent == "frustration":
+        lines.append(
+            "It is frustration, not an answer and not a question about the "
+            "code. Acknowledge the feeling kindly in one short sentence "
+            "(this is normal, keep going), then restate the current "
+            "challenge in FRESH, easier words as an easy re-entry question. "
+            "Do NOT treat it as an answer (verdict is off_target) and do "
+            "NOT repeat your previous question."
         )
     elif intent == "explanation_request":
         lines.append(

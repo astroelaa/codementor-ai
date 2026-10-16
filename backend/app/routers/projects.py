@@ -30,7 +30,7 @@ from app.schemas import (
     TaskUpdate,
 )
 from app.services.languages import get_language
-from app.services.mentor import extract_json_dict
+from app.services.mentor import complete_with_retry, extract_json_dict
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -191,21 +191,24 @@ def generate_brief(
 ):
     project = _get_project(db, project_id, user)
     system = brief_system_prompt(language=project.language)
+    def _parse_brief(raw: str) -> BriefResponse:
+        return BriefResponse.model_validate(extract_json_dict(raw))
+
     try:
-        completion, _ = manager.complete(
+        brief, _, _ = complete_with_retry(
+            manager,
             system=system,
             messages=[{"role": "user", "content": payload.description.strip()}],
             temperature=0.4,
+            parse=_parse_brief,
         )
     except LLMError as exc:
+        if exc.kind == "parse":
+            raise HTTPException(
+                status_code=502,
+                detail="The brief generator returned an unusable response. Try again.",
+            )
         raise llm_error_to_http(exc)
-    try:
-        brief = BriefResponse.model_validate(extract_json_dict(completion.text))
-    except (LLMError, Exception):
-        raise HTTPException(
-            status_code=502,
-            detail="The brief generator returned an unusable response. Try again.",
-        )
     project.objective = brief.objective.strip()
     project.architecture = brief.architecture.strip()
     position = len(project.milestones)
