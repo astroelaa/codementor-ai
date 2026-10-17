@@ -74,6 +74,17 @@ def test_no_sleeping_host_copy_in_user_facing_sources():
         assert "wake" not in lowered, f"stale wake-up copy in {path}"
 
 
+def test_mentor_error_copy_distinguishes_the_three_cases():
+    api = _read("src", "lib", "api.ts")
+    assert "not connected to its backend" in api  # not configured: a build problem
+    assert "Could not reach the mentor server" in api  # network / CORS failure
+    assert "TimeoutError" in api  # timeout is detected, not guessed
+    assert "took too long" in api
+    ws = _read("src", "pages", "Workspace.tsx")
+    assert "Backend not configured" in ws
+    assert "Retry" in ws
+
+
 def test_install_flow_captures_the_real_browser_prompt():
     install = _read("src", "lib", "install.ts")
     assert "beforeinstallprompt" in install

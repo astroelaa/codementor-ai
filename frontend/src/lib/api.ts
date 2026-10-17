@@ -19,6 +19,22 @@ const MISCONFIGURED_DETAIL =
   "The app is not connected to its backend (API URL is not configured). " +
   "If you deploy this yourself, set VITE_API_BASE_URL and rebuild.";
 
+// fetch() rejects with TypeError when the request never completes: offline,
+// DNS failure, TLS problem or a CORS rejection all look like this. A custom
+// timeout surfaces as a DOMException named TimeoutError. Both get honest,
+// distinct copy instead of "something went wrong".
+const UNREACHABLE_DETAIL =
+  "Could not reach the mentor server. Check your connection and try again.";
+const TIMEOUT_DETAIL =
+  "The server took too long to respond. It may be busy — try again.";
+
+/** 60 s default; callers may pass their own signal. */
+function defaultTimeout(): AbortSignal | undefined {
+  return typeof AbortSignal.timeout === "function"
+    ? AbortSignal.timeout(60_000)
+    : undefined;
+}
+
 const TOKEN_KEY = "cm_token";
 const GUEST_KEY = "cm_guest";
 
@@ -267,10 +283,21 @@ function headers(extra: Record<string, string> = {}): Record<string, string> {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!API_BASE) throw new ApiError(0, MISCONFIGURED_DETAIL);
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: headers(init.headers as Record<string, string> | undefined),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: headers(init.headers as Record<string, string> | undefined),
+      // Nothing should hang forever: a dropped connection would otherwise
+      // leave the UI waiting for minutes with no message.
+      signal: init.signal ?? defaultTimeout(),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    if (err instanceof DOMException && err.name === "TimeoutError")
+      throw new ApiError(0, TIMEOUT_DETAIL);
+    throw new ApiError(0, UNREACHABLE_DETAIL);
+  }
   if (res.status === 204) return undefined as T;
   let body: unknown = null;
   try {
@@ -580,7 +607,29 @@ export async function* streamMessage(
   let event = "";
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      // Stall watchdog: if not a single byte arrives for 60 s the stream is
+      // dead (serverless function killed, connection black-holed). Cancel it
+      // and surface a timeout instead of spinning forever.
+      let stallTimer = 0;
+      const stall = new Promise<"stall">((resolve) => {
+        stallTimer = window.setTimeout(() => resolve("stall"), 60_000);
+      });
+      let result: ReadableStreamReadResult<Uint8Array> | "stall";
+      try {
+        result = await Promise.race([reader.read(), stall]);
+      } finally {
+        window.clearTimeout(stallTimer);
+      }
+      if (result === "stall") {
+        await reader.cancel().catch(() => {});
+        yield {
+          kind: "error",
+          detail:
+            "The mentor stopped responding (timed out). It may be busy — try again.",
+        };
+        return;
+      }
+      const { done, value } = result;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const blocks = buffer.split("\n\n");

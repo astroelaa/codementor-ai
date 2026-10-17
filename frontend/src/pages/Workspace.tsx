@@ -241,6 +241,14 @@ export function Workspace() {
       setTurnNotice({ message: err.message, retry });
       return;
     }
+    // status 0 = never reached the API: network/CORS failure or timeout.
+    // Both are recoverable, so offer the retry inline like a busy mentor.
+    // (A misconfigured build is a deploy problem, not a retry problem.)
+    if (!API_MISCONFIGURED && err instanceof ApiError && err.status === 0) {
+      if (retry) setTurnNotice({ message: err.message, retry });
+      else toast("error", err.message);
+      return;
+    }
     toast("error", err instanceof ApiError ? err.message : "Something went wrong. Try again.");
   }
 
