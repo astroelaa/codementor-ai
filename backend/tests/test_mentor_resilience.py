@@ -1,9 +1,12 @@
 """LLM mentor resilience + routing regression tests (all fake-LLM).
 
-Covers the Phase 2 contract:
-- greeting is never assessed as an answer;
-- frustration is acknowledged, never treated as a correct answer, and the
-  question is not repeated;
+Covers the Phase 2 contract and the mentor-input fixes:
+- greetings get a deterministic reply (warm opener + standing question),
+  never an assessment, a praise, or a brand-new question;
+- short confirmations ("Y", "ok") and greeting+answer mixes ("Y\\nhi")
+  route as answers and are carried into the prompt for the model;
+- paraphrase repeats ("Did you consider..." vs "Have you thought...")
+  are caught and retried exactly once;
 - transient 5xx errors and non-JSON replies are retried exactly once
   before the error surfaces (normal + streaming);
 - exhausted rate limits/timeouts surface a clear 503 "mentor is busy"
@@ -89,20 +92,97 @@ def test_frustration_is_retry_eligible():
 # --- assessment guards -----------------------------------------------------------
 def test_greeting_never_assessed_as_answer(user_headers, fake_llm):
     sid = _new_session(user_headers)
+    r1 = client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "It crashes on empty lists."},
+        headers=user_headers,
+    ).json()
+    calls_before = len(fake_llm.calls)
+    # A plain hello is answered deterministically: warm opener + the
+    # standing question. No model call, no assessment, no new question.
+    r = client.post(
+        f"/api/sessions/{sid}/messages", json={"content": "hello"}, headers=user_headers
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert r1["reply"] in body["reply"]
+    assert body["next_topics"] == []
+    assert body["sources"] == []
+    assert len(fake_llm.calls) == calls_before  # the model was never asked
+    detail = client.get(f"/api/sessions/{sid}", headers=user_headers).json()
+    last = detail["messages"][-1]
+    assert last["meta"]["evaluation"]["verdict"] == "greeting"
+    assert r1["reply"] in last["content"]
+    assert last["meta"]["sources"] == []
+
+
+def test_consecutive_greetings_do_not_nest(user_headers, fake_llm):
+    sid = _new_session(user_headers)
     client.post(
         f"/api/sessions/{sid}/messages",
         json={"content": "It crashes on empty lists."},
         headers=user_headers,
     )
-    # Model claims 'incorrect' for a plain hello: guard must override.
-    fake_llm.queue_complete(_evaluated("incorrect", "Hi! ready to start?"))
-    r = client.post(
+    g1 = client.post(
         f"/api/sessions/{sid}/messages", json={"content": "hello"}, headers=user_headers
+    ).json()["reply"]
+    g2 = client.post(
+        f"/api/sessions/{sid}/messages", json={"content": "hi"}, headers=user_headers
+    ).json()["reply"]
+    # The standing question is restated once, never stacked templates.
+    assert g1.count("What happens to len(numbers)") == 1
+    assert g2.count("What happens to len(numbers)") == 1
+    assert g1 not in g2
+
+
+def test_short_confirmation_routes_as_answer(user_headers, fake_llm):
+    sid = _new_session(user_headers)
+    client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "It crashes on empty lists."},
+        headers=user_headers,
+    )
+    fresh = {
+        "reply": "Great. So what should average return for an empty list?",
+        "understanding_score": 30,
+    }
+    fake_llm.queue_complete(json.dumps(fresh))
+    calls_before = len(fake_llm.calls)
+    r = client.post(
+        f"/api/sessions/{sid}/messages", json={"content": "Y"}, headers=user_headers
     )
     assert r.status_code == 200, r.text
-    detail = client.get(f"/api/sessions/{sid}", headers=user_headers).json()
-    verdict = detail["messages"][-1]["meta"]["evaluation"]["verdict"]
-    assert verdict == "greeting"
+    assert r.json()["reply"] == fresh["reply"]
+    complete_calls = [c for c in fake_llm.calls[calls_before:] if c["kind"] == "complete"]
+    assert len(complete_calls) == 1  # no repeat-retry needed
+    # The prompt told the model to read "Y" as a confirmation and move on.
+    assert "short confirmation" in complete_calls[0]["system"]
+
+
+def test_paraphrased_repeat_retried_once(user_headers, fake_llm):
+    sid = _new_session(user_headers)
+    q = "Did you consider what happens when the list is empty?"
+    fake_llm.queue_complete(json.dumps({"reply": q, "understanding_score": 20}))
+    r1 = client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "I think it crashes sometimes."},
+        headers=user_headers,
+    )
+    assert r1.json()["reply"] == q
+    fresh = {
+        "reply": "Good. And what does len(numbers) return for an empty list?",
+        "understanding_score": 25,
+    }
+    paraphrased = "Have you thought about what happens if the list is empty?"
+    fake_llm.queue_complete(json.dumps({"reply": paraphrased, "understanding_score": 20}))
+    fake_llm.queue_complete(json.dumps(fresh))
+    calls_before = len(fake_llm.calls)
+    r = client.post(
+        f"/api/sessions/{sid}/messages", json={"content": "ok"}, headers=user_headers
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["reply"] == fresh["reply"]  # the paraphrase never shipped
+    assert len(fake_llm.calls) - calls_before == 2  # exactly one corrective retry
 
 
 def test_frustration_never_assessed_correct(user_headers, fake_llm):
@@ -271,6 +351,28 @@ def test_stream_plain_text_streams_normally(user_headers, fake_llm):
     token_text = "".join(t["text"] for t in events["token"])
     assert token_text == "A simple plain text question about len?"
     assert events["done"][0]["reply"] == token_text
+
+
+def test_stream_greeting_is_deterministic_and_free(user_headers, fake_llm):
+    sid = _new_session(user_headers)
+    r1 = client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "It crashes on empty input."},
+        headers=user_headers,
+    ).json()
+    calls_before = len(fake_llm.calls)
+    r = client.post(
+        f"/api/sessions/{sid}/messages/stream",
+        json={"content": "hi"},
+        headers=user_headers,
+    )
+    assert r.status_code == 200, r.text
+    events = _parse_sse(r.text)
+    token_text = "".join(t["text"] for t in events["token"])
+    assert r1["reply"] in token_text
+    assert events["done"][0]["reply"] == token_text
+    assert events["done"][0]["sources"] == []
+    assert len(fake_llm.calls) == calls_before  # no model calls at all
 
 
 def test_stream_json_envelope_is_stripped(user_headers, fake_llm):

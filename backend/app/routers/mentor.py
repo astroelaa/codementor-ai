@@ -54,6 +54,7 @@ from app.services.mentor import (
 from app.services.orchestration import (
     RETRY_ELIGIBLE_INTENTS,
     classify_intent,
+    compose_greeting_reply,
     extract_code_block,
     is_repeat,
     previous_assistant_message,
@@ -178,12 +179,19 @@ def _prepare_turn(
     if new_code:
         session.code = new_code
         code_updated = True
-    cards = retrieve_for_turn(session.language, content, prev_q)
+    # Social turns never carry references: sources attached to a plain
+    # hello read as broken citations.
+    cards = (
+        []
+        if intent in ("greeting", "frustration")
+        else retrieve_for_turn(session.language, content, prev_q)
+    )
     turn_notes = turn_context_block(
         intent=intent,
         previous_question=prev_q,
         code_updated=code_updated,
         resources=cards,
+        student_text=content,
     )
     return {
         "intent": intent,
@@ -371,6 +379,51 @@ def _mentor_reply(
     )
 
 
+def _greeting_turn_response(
+    *,
+    db: DbSession,
+    request: Request,
+    session: DebugSession,
+    user: User | None,
+    previous_question: str,
+) -> MentorMessageResponse:
+    """Deterministic hello: no model call, no assessment, no new question.
+
+    Seen live: the model answered a greeting by praising the code and
+    asking about a new area. Composing the reply here guarantees the
+    greeting rule instead of hoping for it.
+    """
+    settings = request.app.state.settings
+    reply = compose_greeting_reply(previous_question, seed=len(session.messages))
+    feedback = MentorFeedback(
+        reply=reply,
+        understanding_score=session.understanding_score,
+        next_topics=[],
+        evaluation=EvaluationOut(verdict="greeting"),
+    )
+    message, _ = _persist_assistant_turn(
+        db,
+        session,
+        user,
+        feedback,
+        provider="mentor",
+        is_hint=False,
+        usage=None,
+        sources=[],
+    )
+    return MentorMessageResponse(
+        reply=reply,
+        understanding_score=feedback.understanding_score,
+        hints_left=_hints_left(settings, session),
+        misconception=None,
+        next_topics=[],
+        message_id=message.id,
+        provider="mentor",
+        usage=None,
+        sources=[],
+    )
+
+
 @router.post(
     "/sessions",
     response_model=SessionDetailResponse,
@@ -534,6 +587,14 @@ def post_message(
         Message(session_id=session.id, role="user", content=content)
     )
     db.commit()
+    if turn["intent"] == "greeting" and turn["previous_question"]:
+        return _greeting_turn_response(
+            db=db,
+            request=request,
+            session=session,
+            user=user,
+            previous_question=turn["previous_question"],
+        )
     history = build_history(session.messages, settings.history_window)
     recap, project_context = _memory_context(db, session)
     system = chat_system_prompt(
@@ -610,6 +671,45 @@ def post_message_stream(
 
     def event_stream():
         prev_q = turn["previous_question"]
+        if turn["intent"] == "greeting" and prev_q:
+            reply_text = compose_greeting_reply(prev_q, seed=len(session.messages))
+            feedback = MentorFeedback(
+                reply=reply_text,
+                understanding_score=session.understanding_score,
+                next_topics=[],
+                evaluation=EvaluationOut(verdict="greeting"),
+            )
+            try:
+                message, _ = _persist_assistant_turn(
+                    db,
+                    session,
+                    user,
+                    feedback,
+                    provider="mentor",
+                    is_hint=False,
+                    usage=None,
+                    sources=[],
+                )
+            except Exception:
+                db.rollback()
+                yield _sse("error", {"detail": "Could not save the mentor reply."})
+                return
+            yield _sse("token", {"text": reply_text})
+            yield _sse(
+                "done",
+                {
+                    "reply": reply_text,
+                    "understanding_score": feedback.understanding_score,
+                    "hints_left": _hints_left(settings, session),
+                    "misconception": None,
+                    "next_topics": [],
+                    "message_id": message.id,
+                    "provider": "mentor",
+                    "usage": None,
+                    "sources": [],
+                },
+            )
+            return
         eligible = bool(prev_q and turn["intent"] in RETRY_ELIGIBLE_INTENTS)
         # Buffer at least enough text to recognise a repeat of the previous
         # question before the first token is sent to the client.

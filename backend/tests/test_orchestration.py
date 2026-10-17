@@ -42,6 +42,15 @@ def test_intent_code_change_and_answer():
     assert classify_intent("I think len([]) is zero") == "answer"
     assert classify_intent("??") == "unclear"
     assert classify_intent("   ") == "unclear"
+    # Bare confirmations/denials are answers, not noise.
+    assert classify_intent("Y") == "answer"
+    assert classify_intent("yes") == "answer"
+    assert classify_intent("no") == "answer"
+    assert classify_intent("ok") == "answer"
+    # A greeting line inside a message must not swallow the rest.
+    assert classify_intent("Y\nhi") == "answer"
+    assert classify_intent("hi\nyo") == "greeting"
+    assert classify_intent("hi\nexplain this code?") == "explanation_request"
 
 
 def test_extract_code_block():
@@ -73,6 +82,42 @@ def test_is_repeat_detection():
     ) is True
     assert is_repeat("Explain how division works in Python.", q) is False
     assert is_repeat("", q) is False
+    # Paraphrased repeats (swapped synonyms) are still repeats.
+    assert is_repeat(
+        "Have you thought about what happens if the list is empty?",
+        "Did you consider what happens when the list is empty?",
+    ) is True
+    # A genuinely different follow-up sharing a couple of words is not.
+    assert is_repeat(
+        "What would happen if one of the elements isn't a number?",
+        "Did you consider what happens when the list is empty?",
+    ) is False
+
+
+def test_greeting_compose_restates_without_nesting():
+    from app.services.orchestration import compose_greeting_reply
+
+    q = "What happens to len(numbers) when the list is empty?"
+    first = compose_greeting_reply(q, seed=0)
+    assert q in first
+    assert "assess" not in first.lower()
+    # Greeting again must reuse the bare question, not stack templates.
+    second = compose_greeting_reply(first, seed=1)
+    assert second.count(q) == 1
+    assert first not in second
+
+
+def test_turn_context_block_flags_short_confirmation():
+    block = turn_context_block(
+        intent="answer", previous_question="Is the list empty here?",
+        code_updated=False, resources=[], student_text="Y",
+    )
+    assert "short confirmation" in block
+    mixed = turn_context_block(
+        intent="answer", previous_question="Is the list empty here?",
+        code_updated=False, resources=[], student_text="Y\nhi",
+    )
+    assert "also contains a short greeting" in mixed
 
 
 def test_retry_once_on_repeat_then_uses_fresh(user_headers, fake_llm):
@@ -374,6 +419,27 @@ def test_retrieval_returns_only_matching_language_cards():
     assert hits
     assert all(c.language in ("python", "general") for c in hits)
     assert retrieve("python", "hello") == []
+
+
+def test_retrieval_is_topical_and_deduped():
+    from app.services.knowledge import CARDS, retrieve
+
+    # A zero-division question gets the exact exception reference, with
+    # no near-blanket "python" title matches and no duplicate URLs.
+    hits = retrieve("python", "Why does Python raise ZeroDivisionError when I divide by zero?")
+    assert [c.id for c in hits] == ["py-empty"]
+    assert hits[0].url.endswith("#ZeroDivisionError")
+
+    # The two Python tutorial cards no longer share one generic URL.
+    by_id = {c.id: c for c in CARDS}
+    assert by_id["py-empty"].url != by_id["py-range"].url
+
+    # Weak signals alone (a len() mention) still surface the empty-input
+    # card, deduped by URL.
+    hits2 = retrieve("python", "ok len numbers zero")
+    assert any(c.id == "py-empty" for c in hits2)
+    urls = [c.url for c in hits2]
+    assert len(urls) == len(set(urls))
 
 
 def test_stream_prompt_carries_anti_repeat_context():

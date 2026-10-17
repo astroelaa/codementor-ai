@@ -97,14 +97,39 @@ it, add an explicit do-not-repeat rule, and retry once on detected repeat.
 
 | Input example | Intent | Effect |
 |---|---|---|
-| `hello`, `good morning` | greeting | Greeting rule in prompt; verdict forced `greeting`; no retry |
+| `hello`, `good morning` (standing question exists) | greeting | Deterministic reply: warm opener + the bare standing question — no model call, never an assessment |
 | `what the hell`, `wtf`, `I give up` | frustration | Acknowledge + fresh re-entry question; verdict forced `off_target`; retry eligible |
+| `Y`, `yes`, `ok`, `no` | answer (short) | Labelled as a confirmation in the prompt: read against the last question, move forward, never re-ask |
+| `Y\nhi` (greeting line + answer) | answer | Greeting lines are stripped before classification; the prompt notes the greeting |
 | `give me a hint`, `I'm stuck` | hint_request | Hint-budget rule |
 | `explain this`, `I don't understand` | explanation_request | May explain (≤120 words) + check question; retry eligible |
 | fenced code / 2+ code lines | code_change | Code-updated flag in prompt |
 | trailing `?` | question | Answer briefly + reconnect; retry eligible |
 | anything else substantive | answer | Evaluated vs previous question; retry eligible |
 | blank / `??` | unclear | Treated as confusion; greeting-adjacent handling |
+
+## Input routing fixes (live-verified)
+
+- **Greetings are deterministic.** With a standing question, `hi`/`hello`
+  never reach the model: the backend composes `compose_greeting_reply()`
+  (warm opener + the bare question, never nested templates). Live probes
+  before the fix showed the model praising the loop and asking a brand-new
+  question for a plain `hi`.
+- **Short replies are answers.** `Y`/`n`/`ok` used to be `unclear` (2-char
+  filter) and the model floundered; they now classify as `answer` with an
+  explicit short-confirmation clause.
+- **Paraphrase repeats are caught.** `is_repeat` also compares content-token
+  overlap (stopwords removed, lightly singularized) at ≥0.6 Jaccard, so
+  "Did you consider…" vs "Have you thought about…" triggers the single
+  corrective retry; different follow-ups that share a couple of words stay
+  below the bar (tested).
+- **Citations are topical and deduped.** Retrieval scores
+  title/topic/keyword matches 3× text matches, requires ≥2 text matches when
+  no keyword matches, removes the language name and title boilerplate from
+  queries, and keeps one card per URL. `py-empty` links to the
+  `ZeroDivisionError` reference and `py-range` to the `for`-statement section
+  instead of both pointing at the generic tutorial index. Social turns
+  (greeting/frustration) carry no sources at all.
 
 ## Limitations (honest)
 
@@ -118,6 +143,9 @@ it, add an explicit do-not-repeat rule, and retry once on detected repeat.
 - `sources[]` are persisted in `message.meta.sources` and shown on resume
   (`Workspace.tsx`) and replay (`History.tsx`); rows written before this change
   lack the key and read back as `[]`.
+- Paraphrased repeats below both the 0.82 sequence ratio and the 0.6
+  content-token overlap still slip through; the corrective retry is capped
+  at one attempt, never a loop.
 - Intent is heuristic (regex + line counts); off-topic detection relies on
   the model's `evaluation.verdict = off_target`, not the router.
 - `previous_assistant_message()` trusts the latest assistant row, including

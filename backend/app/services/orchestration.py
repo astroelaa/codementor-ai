@@ -30,6 +30,68 @@ GREETING_RES = [
 
 def _is_greeting(stripped: str) -> bool:
     return any(rx.match(stripped) for rx in GREETING_RES)
+
+
+# Bare confirmations/denials ("Y", "yes", "ok") are valid answers to a
+# yes/no question; they must reach the model labelled as an answer, not as
+# noise.
+SHORT_ANSWER_RE = re.compile(
+    r"^(y|n|ye|yea|yeah|yep|yes|no|nope|nah|ok|okay|sure|fine|right|"
+    r"got it|i see|makes sense|alright)[!. ]*$",
+    re.IGNORECASE,
+)
+
+
+def is_short_reply(text: str) -> bool:
+    """True for bare confirmations/denials like 'Y', 'yes', 'ok'."""
+    return bool(SHORT_ANSWER_RE.match((text or "").strip()))
+
+
+def strip_greeting_lines(text: str) -> tuple[str, bool]:
+    """Drop lines that are pure greetings from a multi-line message.
+
+    Returns (remaining_text, had_greeting_line). "Y\\nhi" keeps "Y" and
+    reports the greeting; "hi\\nyo" keeps nothing (pure greeting).
+    """
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    kept = [ln for ln in lines if not _is_greeting(ln)]
+    return "\n".join(kept), len(kept) != len(lines)
+
+
+GREETING_OPENERS = (
+    "Hi! Good to see you.",
+    "Hey there!",
+    "Hello! Ready when you are.",
+    "Hi! Good to have you here.",
+)
+
+
+def _strip_known_openers(text: str) -> str:
+    cleaned = (text or "").strip()
+    changed = True
+    while changed:
+        changed = False
+        for opener in GREETING_OPENERS:
+            if cleaned.startswith(opener):
+                cleaned = cleaned[len(opener):].strip()
+                changed = True
+    return cleaned
+
+
+def compose_greeting_reply(previous_question: str | None, seed: int = 0) -> str:
+    """Deterministic greeting: warm opener + the standing question.
+
+    A hello can then never be assessed as an answer, praised, or answered
+    with a brand-new question; consecutive greetings reuse the bare
+    question instead of nesting templates.
+    """
+    opener = GREETING_OPENERS[seed % len(GREETING_OPENERS)]
+    question = _strip_known_openers(previous_question or "")
+    if not question:
+        return f"{opener} Ready to keep going?"
+    return f"{opener} {question[:300]}"
+
+
 FRUSTRATION_RES = [
     re.compile(p, re.IGNORECASE)
     for p in (
@@ -89,27 +151,35 @@ def classify_intent(text: str) -> str:
 
     One of: greeting, frustration, hint_request, explanation_request,
     code_change, question, unclear, answer. Rule order matters (specific
-    first).
+    first). Pure greeting lines inside a multi-line message ("Y\\nhi")
+    are stripped before classifying the rest.
     """
     stripped = (text or "").strip()
-    if not stripped or len(re.sub(r"[^\w]", "", stripped)) < 2:
+    if not stripped:
         return "unclear"
     if _is_greeting(stripped):
         return "greeting"
-    if _is_frustration(stripped):
+    body, _had_greeting = strip_greeting_lines(stripped)
+    if not body:
+        return "greeting"
+    if is_short_reply(body):
+        return "answer"
+    if len(re.sub(r"[^\w]", "", body)) < 2:
+        return "unclear"
+    if _is_frustration(body):
         return "frustration"
-    if HINT_RE.search(stripped):
+    if HINT_RE.search(body):
         return "hint_request"
-    if EXPLAIN_RE.search(stripped):
+    if EXPLAIN_RE.search(body):
         return "explanation_request"
-    if CODE_FENCE_RE.search(stripped):
+    if CODE_FENCE_RE.search(body):
         return "code_change"
     code_lines = sum(
-        1 for line in stripped.splitlines() if any(rx.search(line) for rx in CODE_LINE_RES)
+        1 for line in body.splitlines() if any(rx.search(line) for rx in CODE_LINE_RES)
     )
     if code_lines >= 2:
         return "code_change"
-    if stripped.endswith("?"):
+    if body.endswith("?"):
         return "question"
     return "answer"
 
@@ -128,11 +198,35 @@ def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+_REPEAT_STOP = frozenset({
+    "the", "a", "an", "and", "or", "to", "of", "in", "on", "is", "it",
+    "this", "that", "with", "for", "what", "when", "if", "not", "but",
+    "so", "at", "by", "from", "as", "do", "does", "did", "you", "your",
+    "i", "my", "we", "me", "he", "she", "they", "them", "there", "here",
+    "about", "again", "same", "would", "could", "should", "can", "will",
+    "have", "has", "had", "are", "was", "were", "be", "been", "being",
+    "its", "their", "our", "out", "now", "then", "than", "too", "very",
+    "just", "only", "also", "much", "many", "how", "why", "where", "who",
+    "which", "any", "some", "more", "most",
+})
+
+
+def _content_tokens(text: str) -> set[str]:
+    """Content words only, lightly singularized (for synonym-proof overlap)."""
+    words = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return {
+        w[:-1] if w.endswith("s") and not w.endswith("ss") and len(w) > 3 else w
+        for w in words
+        if len(w) > 2 and w not in _REPEAT_STOP
+    }
+
+
 def is_repeat(new_reply: str, old_reply: str, threshold: float = 0.82) -> bool:
     """True when the new reply says essentially the same as the old one.
 
-    Uses normalized similarity plus a containment check so rephrased repeats
-    are caught without flagging genuinely different follow-ups.
+    Uses normalized similarity, a containment check, and a content-token
+    overlap check so paraphrase repeats ("Did you consider..." vs "Have
+    you thought about...") are caught without flagging different follow-ups.
     """
     new, old = _normalize(new_reply), _normalize(old_reply)
     if not new or not old:
@@ -143,7 +237,14 @@ def is_repeat(new_reply: str, old_reply: str, threshold: float = 0.82) -> bool:
     if ratio >= threshold:
         return True
     short, long = (new, old) if len(new) <= len(old) else (old, new)
-    return len(short) >= 20 and short in long
+    if len(short) >= 20 and short in long:
+        return True
+    new_tokens, old_tokens = _content_tokens(new), _content_tokens(old)
+    if len(new_tokens) >= 3 and len(old_tokens) >= 3:
+        overlap = len(new_tokens & old_tokens) / len(new_tokens | old_tokens)
+        if overlap >= 0.6:
+            return True
+    return False
 
 
 def extract_code_block(text: str) -> str | None:
@@ -173,16 +274,17 @@ RETRY_ELIGIBLE_INTENTS = ("answer", "explanation_request", "question", "frustrat
 
 def turn_context_block(
     *, intent: str, previous_question: str | None, code_updated: bool,
-    resources: list[dict],
+    resources: list[dict], student_text: str | None = None,
 ) -> str:
     """Short deterministic context block appended to the system prompt."""
     lines = [f"The student's latest message intent is: {intent}."]
     if intent == "greeting":
         lines.append(
-            "It is a greeting, not an answer. Follow the greeting rule: "
-            "greet back warmly in one short sentence, then restate the "
-            "current guiding question in FRESH words. Never assess a "
-            "greeting as an answer (verdict is always greeting)."
+            "It is a greeting, not an answer. Greet back warmly in one "
+            "short sentence, then restate the current guiding question in "
+            "FRESH words. Do NOT assess or praise their code, do NOT ask "
+            "about a new area, and never mark a greeting as an answer "
+            "(verdict is always greeting)."
         )
     elif intent == "frustration":
         lines.append(
@@ -206,6 +308,21 @@ def turn_context_block(
         )
     elif intent == "hint_request":
         lines.append("The student asked for a hint. Obey the hint budget rule.")
+    if intent == "answer" and is_short_reply(student_text or ""):
+        lines.append(
+            "The student replied with a very short confirmation or denial "
+            "(e.g. 'Y' means yes). Read it against your last question, "
+            "acknowledge it in a few words, then move the conversation "
+            "FORWARD with the natural next question. Never repeat or "
+            "reword your previous question."
+        )
+    if student_text and intent != "greeting":
+        _body, had_greeting = strip_greeting_lines(student_text)
+        if had_greeting:
+            lines.append(
+                "The message also contains a short greeting; acknowledging "
+                "it in a few words is welcome."
+            )
     if previous_question:
         lines.append(
             "The last question you asked was: "

@@ -38,14 +38,16 @@ def _c(id, language, topic, title, url, license, text, keywords):
 
 CARDS: list[Card] = [
     _c("py-empty", "python", "empty input",
-       "Python tutorial: lists", "https://docs.python.org/3/tutorial/",
+       "Python docs: ZeroDivisionError",
+       "https://docs.python.org/3/library/exceptions.html#ZeroDivisionError",
        "PSF license",
        "An empty list has length 0, so dividing by len(numbers) raises "
        "ZeroDivisionError. Check for the empty case before dividing, for "
        "example with an early return or a guard clause.",
        ("empty", "len", "zerodivisionerror", "divide", "guard")),
     _c("py-range", "python", "off-by-one",
-       "Python tutorial: for statements", "https://docs.python.org/3/tutorial/",
+       "Python tutorial: for statements",
+       "https://docs.python.org/3/tutorial/controlflow.html#for-statements",
        "PSF license",
        "range(n) produces 0 through n-1, so valid indexes for a list of "
        "length n are 0 to n-1. Looping to n itself reads one element past "
@@ -166,6 +168,10 @@ CARDS: list[Card] = [
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
+# Title boilerplate that matches almost every card without carrying
+# topical signal ("Python tutorial: ...", "MDN: ...").
+_BOILER = frozenset({"tutorial", "docs", "doc", "handbook", "method", "reference", "guide"})
+
 
 def _tokens(text: str) -> set[str]:
     return set(_WORD_RE.findall((text or "").lower()))
@@ -188,19 +194,42 @@ def retrieve(language: str, query: str, top_k: int = 2) -> list[Card]:
     Prefers cards for the requested language; general cards always eligible.
     Returns at most top_k cards with a positive score, best first.
     """
-    words = _tokens(query) - _STOP
+    words = _tokens(query) - _STOP - _BOILER
+    if language:
+        words.discard(language.strip().lower())
     if not words:
         return []
     scored: list[tuple[int, Card]] = []
     for card in CARDS:
         if card.language != "general" and card.language != (language or ""):
             continue
-        hay = _tokens(card.title + " " + card.topic + " " + " ".join(card.keywords) + " " + card.text) - _STOP
-        overlap = words & hay
-        if overlap:
-            scored.append((len(overlap), card))
+        # Title/topic/keyword matches are topical; text matches are weak
+        # signals and only count when at least two of them align.
+        strong = (
+            _tokens(card.title + " " + card.topic + " " + " ".join(card.keywords))
+            - _STOP
+        )
+        weak = _tokens(card.text) - _STOP
+        strong_overlap = words & strong
+        weak_overlap = words & weak
+        if strong_overlap:
+            score = 3 * len(strong_overlap) + len(weak_overlap)
+        elif len(weak_overlap) >= 2:
+            score = len(weak_overlap)
+        else:
+            continue
+        scored.append((score, card))
     scored.sort(key=lambda item: item[0], reverse=True)
-    return [card for _, card in scored[: max(0, top_k)]]
+    picked: list[Card] = []
+    used_urls: set[str] = set()
+    for _score, card in scored:
+        if card.url in used_urls:
+            continue
+        used_urls.add(card.url)
+        picked.append(card)
+        if len(picked) >= max(0, top_k):
+            break
+    return picked
 
 
 def format_references(cards: list[Card]) -> str:
