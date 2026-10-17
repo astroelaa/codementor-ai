@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -16,11 +17,16 @@ import { Counter } from "../components/Counter";
 import { Faq } from "../components/Faq";
 import { Reveal } from "../components/Reveal";
 import { LogoMark } from "../components/Logo";
+import { useWaveEligible } from "../lib/heroWave";
+
+// three.js lives behind this dynamic import: it stays a separate lazy chunk
+// and never touches the main bundle.
+const Wave = lazy(() => import("../components/Wave"));
 
 /* ---------- hero product mockup (static, representative) ---------- */
 function HeroMockup() {
   return (
-    <div className="card relative overflow-hidden shadow-2xl" aria-hidden="true">
+    <div className="glass-card relative overflow-hidden shadow-2xl" aria-hidden="true">
       <div className="glow-accent pointer-events-none absolute -top-24 left-1/2 h-64 w-[130%] -translate-x-1/2" />
       <div className="flex items-center gap-2 border-b border-(--border) px-4 py-3">
         <span className="size-2.5 rounded-full bg-(--faint)" />
@@ -46,7 +52,7 @@ function HeroMockup() {
             </p>
           </div>
           <div className="flex justify-end">
-            <p className="rounded-xl rounded-tr-sm bg-(--accent) px-3.5 py-2.5 text-white">
+            <p className="rounded-xl rounded-tr-sm accent-deep px-3.5 py-2.5 text-white">
               It would be 0… and then we divide by zero.
             </p>
           </div>
@@ -157,16 +163,33 @@ const FAQS = [
 ];
 
 export function Landing() {
+  const waveEligible = useWaveEligible();
   return (
     <main>
       {/* ---------- hero ---------- */}
       <section className="relative overflow-hidden">
         <div className="bg-grid pointer-events-none absolute inset-0" aria-hidden="true" />
+        <div className="bg-grid-perspective" aria-hidden="true" />
         <Aurora />
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] overflow-hidden"
+          aria-hidden="true"
+        >
+          {waveEligible ? (
+            <Suspense fallback={null}>
+              <Wave />
+            </Suspense>
+          ) : (
+            <div className="hero-wave-static" />
+          )}
+        </div>
+        <div className="hero-scrim" aria-hidden="true" />
         <div className="relative mx-auto grid w-[min(1200px,92%)] items-center gap-12 py-24 md:py-28 lg:grid-cols-[1.05fr_1fr] lg:py-32">
           <div>
             <Reveal>
-              <span className="pill">Socratic debugging mentor</span>
+              <span className="pill">
+                <LogoMark size={14} /> Socratic debugging mentor
+              </span>
             </Reveal>
             <Reveal delay={0.05}>
               <h1 className="display mt-5">
@@ -183,7 +206,8 @@ export function Landing() {
               </p>
             </Reveal>
             <Reveal delay={0.15}>
-              <div className="mt-8 flex flex-wrap gap-3">
+              <div className="relative isolate mt-8 flex flex-wrap gap-3">
+                <span className="beam -left-7 -top-24 -bottom-10 -z-10" aria-hidden="true" />
                 <Link to="/app" className="btn btn-primary px-7 py-3.5 text-base">
                   Start debugging free <ArrowRight size={17} strokeWidth={1.5} />
                 </Link>
@@ -304,7 +328,7 @@ export function Landing() {
             </div>
           </Reveal>
           <Reveal delay={0.1}>
-            <div className="card p-6 md:p-8">
+            <div className="glass-card p-6 md:p-8">
               <div className="flex items-center gap-3">
                 <LogoMark size={36} />
                 <div>
@@ -353,7 +377,7 @@ export function Landing() {
       <section className="border-t border-(--border) bg-(--bg-soft)">
         <div className="mx-auto w-[min(1200px,92%)] py-24 md:py-32">
           <Reveal>
-            <div className="card relative grid gap-10 overflow-hidden p-8 md:grid-cols-[1.1fr_1fr] md:p-12">
+            <div className="glass-card relative grid gap-10 overflow-hidden p-8 md:grid-cols-[1.1fr_1fr] md:p-12">
               <div className="glow-accent pointer-events-none absolute -right-24 -top-24 h-72 w-72" aria-hidden="true" />
               <div className="relative">
                 <p className="eyebrow">Get started</p>

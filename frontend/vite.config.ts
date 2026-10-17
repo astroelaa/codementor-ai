@@ -55,6 +55,9 @@ export default defineConfig({
       workbox: {
         // App shell is precached. API traffic is NEVER cached: no tokens,
         // no private conversations, no cross-user leaks through the cache.
+        // The decorative three.js wave chunk is excluded from the precache:
+        // it is lazy-loaded on demand and never needed for offline starts.
+        globIgnores: ["**/Wave-*.js"],
         navigateFallback: `${BASE}index.html`,
         runtimeCaching: [
           {
