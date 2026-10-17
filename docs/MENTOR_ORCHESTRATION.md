@@ -41,7 +41,13 @@ All claims below are verified by `backend/tests/test_orchestration.py` plus
    reply, before surfacing the error. `parse_feedback()` extracts the JSON
    object and `MentorFeedback` (Pydantic) validates it, including the
    `evaluation` object (`verdict`, `assessed_reasoning`, `missing_concept`).
-   Exhausting the retry raises 502 (`config`/`all_failed` → 503 via
+   Rate limits and timeouts get one bounded wait first: the provider's
+   `Retry-After` is honoured when sent, capped at 8 s so a request can never
+   stall. When every configured provider ends up rate-limited or timed out the
+   kind stays `rate_limit` and the API answers **503 "The mentor is busy right
+   now. Try again in a moment."** — a transient provider miss is never
+   presented as a broken request. Deterministic failures are never retried;
+   exhausting the retry raises 502 (`config`/`all_failed` → 503 via
    `llm_error_to_http`). Streaming is different (step 6).
 5. **Assessment guards.** Deterministic verdict overrides: intent `greeting`
    forces `evaluation.verdict = "greeting"` and intent `frustration` forces
