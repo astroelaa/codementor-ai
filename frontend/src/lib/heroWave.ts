@@ -29,6 +29,13 @@ export function useWaveEligible(): boolean {
       const opts = { failIfMajorPerformanceCaveat: true } as WebGLContextAttributes;
       const gl = probe.getContext("webgl2", opts) ?? probe.getContext("webgl", opts);
       if (!gl) return;
+      // Reject software rasterizers (SwiftShader / llvmpipe / VMs): the wave
+      // would run, but it would burn the main thread on CPUs, not GPUs.
+      const debug = gl.getExtension("WEBGL_debug_renderer_info");
+      if (debug) {
+        const renderer = String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) ?? "");
+        if (/swiftshader|llvmpipe|software|basic render/i.test(renderer)) return;
+      }
     } catch {
       return;
     }
@@ -37,9 +44,9 @@ export function useWaveEligible(): boolean {
       if (!cancelled) setEligible(true);
     };
     if (typeof window.requestIdleCallback === "function") {
-      idleId = window.requestIdleCallback(show, { timeout: 1400 });
+      idleId = window.requestIdleCallback(show, { timeout: 1800 });
     } else {
-      timer = window.setTimeout(show, 700);
+      timer = window.setTimeout(show, 900);
     }
     return () => {
       cancelled = true;

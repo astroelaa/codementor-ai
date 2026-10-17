@@ -25,22 +25,23 @@ export default function Wave() {
 
     const FIELD_W = 9.2;
     const FIELD_D = 5.6;
-    const SEG_X = 76;
-    const SEG_Z = 34;
+    const SEG_X = 56;
+    const SEG_Z = 24;
     const AMP_1 = 0.42;
     const AMP_2 = 0.15;
+    const TARGET_FPS = 30;
 
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
         alpha: true,
-        antialias: true,
+        antialias: false,
         powerPreference: "low-power",
       });
     } catch {
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setClearAlpha(0);
     const canvas = renderer.domElement;
     canvas.style.position = "absolute";
@@ -106,7 +107,7 @@ export default function Wave() {
     scene.add(wave);
 
     // ---- sparse starfield ----
-    const STAR_COUNT = 240;
+    const STAR_COUNT = 150;
     const starPos = new Float32Array(STAR_COUNT * 3);
     for (let s = 0; s < STAR_COUNT; s += 1) {
       starPos[s * 3] = (Math.random() - 0.5) * 14;
@@ -153,11 +154,17 @@ export default function Wave() {
     const clock = new THREE.Clock();
     let raf = 0;
     let inView = true;
+    let nextFrameAt = 0;
 
     const frame = () => {
       raf = 0;
       if (!inView || document.hidden) return;
       const t = clock.getElapsedTime();
+      if (t < nextFrameAt) {
+        raf = requestAnimationFrame(frame);
+        return;
+      }
+      nextFrameAt = t + 1 / TARGET_FPS;
       px += (targetX - px) * 0.05;
       py += (targetY - py) * 0.05;
       camera.position.x = camBase.x + px * 0.55;
