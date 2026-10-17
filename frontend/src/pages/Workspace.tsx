@@ -674,7 +674,7 @@ export function Workspace() {
 
           {/* ---------- chat ---------- */}
           <Reveal delay={0.06} className="min-w-0">
-            <div className="card flex min-h-[480px] flex-col overflow-hidden">
+            <div className="glass-card flex min-h-[480px] flex-col overflow-hidden">
               <div className="border-b border-(--border) px-4 py-2.5 text-[13px] font-semibold text-(--muted)">
                 Mentor session
               </div>
@@ -706,7 +706,7 @@ export function Workspace() {
                         <p
                           className={`rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed ${
                             m.role === "user"
-                              ? "rounded-tr-sm bg-(--accent) text-white"
+                              ? "rounded-tr-sm accent-deep text-white"
                               : "rounded-tl-sm border border-(--border) bg-(--surface-2)"
                           }`}
                         >
@@ -867,7 +867,7 @@ export function Workspace() {
 
           {/* ---------- side panel ---------- */}
           <Reveal delay={0.12} className="min-w-0">
-            <aside className="card flex flex-col divide-y divide-(--border) lg:sticky lg:top-24">
+            <aside className="glass-card flex flex-col divide-y divide-(--border) lg:sticky lg:top-24">
               <div className="p-4">
                 <p className="label">Hint budget</p>
                 <div className="flex gap-1.5" aria-label={`${hintsLeft} hints left`}>

@@ -61,7 +61,7 @@ export function Footer() {
             </nav>
           ))}
         </div>
-        <div className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-(--border) pt-6 text-[13px] text-(--faint)">
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-(--border) pt-6 text-[13px] text-(--muted)">
           <span>© {year} CodeMentor AI</span>
           <span>Learn to understand code.</span>
         </div>

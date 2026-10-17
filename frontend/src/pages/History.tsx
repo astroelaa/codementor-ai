@@ -165,7 +165,7 @@ export function History() {
                         <p
                           className={`rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed ${
                             m.role === "user"
-                              ? "rounded-tr-sm bg-(--accent) text-white"
+                              ? "rounded-tr-sm accent-deep text-white"
                               : "rounded-tl-sm border border-(--border) bg-(--surface-2)"
                           }`}
                         >

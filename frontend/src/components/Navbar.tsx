@@ -139,7 +139,7 @@ export function Navbar() {
                 >
                   <Bell size={17} strokeWidth={1.5} />
                   {unreadN > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-(--accent) px-1 text-[10px] font-bold text-white">
+                    <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full accent-deep px-1 text-[10px] font-bold text-white">
                       {unreadN > 9 ? "9+" : unreadN}
                     </span>
                   )}
@@ -151,7 +151,7 @@ export function Navbar() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -4, scale: 0.98 }}
                       transition={{ duration: 0.16, ease: "easeOut" }}
-                      className="card absolute right-0 top-11 z-[90] max-h-80 w-80 overflow-y-auto p-2"
+                      className="glass-pop absolute right-0 top-11 z-[90] max-h-80 w-80 overflow-y-auto p-2"
                       role="dialog"
                       aria-label="Notifications"
                     >
@@ -208,7 +208,7 @@ export function Navbar() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -4, scale: 0.98 }}
                       transition={{ duration: 0.16, ease: "easeOut" }}
-                      className="card absolute right-0 top-11 z-[90] w-56 p-2"
+                      className="glass-pop absolute right-0 top-11 z-[90] w-56 p-2"
                       role="dialog"
                       aria-label="Account"
                     >
