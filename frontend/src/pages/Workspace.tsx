@@ -18,7 +18,10 @@ import {
   Play,
   RotateCcw,
   Send,
+  Square,
   Tag,
+  TriangleAlert,
+  X,
 } from "lucide-react";
 import { CodeEditor } from "../components/CodeEditor";
 import { EmptyState } from "../components/bits";
@@ -90,7 +93,12 @@ export function Workspace() {
   const [explaining, setExplaining] = useState(false);
   const [guestCapped, setGuestCapped] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [turnNotice, setTurnNotice] = useState<{
+    message: string;
+    retry: (() => Promise<void>) | null;
+  } | null>(null);
 
+  const abortRef = useRef<AbortController | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [resuming, setResuming] = useState(() => searchParams.get("session") !== null);
@@ -207,15 +215,20 @@ export function Workspace() {
     };
   }, [resumeId]);
 
-  function handleApiError(err: unknown) {
+  function handleApiError(err: unknown, retry?: () => Promise<void>) {
     if (err instanceof ApiError && err.status === 403 && err.message.includes("1 free session")) {
       setGuestCapped(true);
+      return;
+    }
+    if (err instanceof ApiError && err.status === 503 && retry) {
+      setTurnNotice({ message: err.message, retry });
       return;
     }
     toast("error", err instanceof ApiError ? err.message : "Something went wrong. Try again.");
   }
 
   function applyTurn(turn: MentorTurn) {
+    setTurnNotice(null);
     setScore(turn.understanding_score);
     setHintsLeft(turn.hints_left);
     setTopics(turn.next_topics);
@@ -231,13 +244,21 @@ export function Workspace() {
     ]);
   }
 
+  function cancelStream() {
+    abortRef.current?.abort();
+  }
+
   async function runStream(id: string, content: string, snapshot: string) {
     setBusy(true);
     setProvider("");
+    setTurnNotice(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
     let acc = "";
     let finished = false;
     try {
-      for await (const ev of streamMessage(id, content, snapshot)) {
+      for await (const ev of streamMessage(id, content, snapshot, controller.signal)) {
+        if (controller.signal.aborted) break;
         if (ev.kind === "provider") setProvider(ev.provider);
         else if (ev.kind === "token") {
           acc += ev.text;
@@ -252,16 +273,25 @@ export function Workspace() {
             try {
               applyTurn(await api.postMessage(id, content, snapshot));
             } catch (err) {
-              handleApiError(err);
+              if (controller.signal.aborted) return;
+              handleApiError(err, () => runStream(id, content, snapshot));
             }
           } else {
-            toast("error", ev.detail);
+            // Server-side failure (e.g. the mentor is busy): recoverable —
+            // surface it inline with a retry button instead of a raw toast.
+            setTurnNotice({
+              message: ev.detail,
+              retry: () => runStream(id, content, snapshot),
+            });
           }
         }
       }
     } catch (err) {
-      if (!finished) handleApiError(err);
+      if (!finished && !controller.signal.aborted) {
+        handleApiError(err, () => runStream(id, content, snapshot));
+      }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setBusy(false);
       setStreaming("");
     }
@@ -312,21 +342,24 @@ export function Workspace() {
     await runStream(sessionId, content, code);
   }
 
-  async function askHint() {
+  async function askHint(isRetry = false) {
     if (busy || !sessionId || status !== "active") return;
-    if (hintsLeft <= 0) {
+    if (!isRetry && hintsLeft <= 0) {
       toast("info", "No hints left in this session. Reason it out.");
       return;
     }
     setBusy(true);
-    setMessages((m) => [
-      ...m,
-      { id: `u-${Date.now()}`, role: "user", content: "I am stuck. Give me a hint, not the answer." },
-    ]);
+    setTurnNotice(null);
+    if (!isRetry) {
+      setMessages((m) => [
+        ...m,
+        { id: `u-${Date.now()}`, role: "user", content: "I am stuck. Give me a hint, not the answer." },
+      ]);
+    }
     try {
       applyTurn(await api.requestHint(sessionId, code));
     } catch (err) {
-      handleApiError(err);
+      handleApiError(err, () => askHint(true));
     } finally {
       setBusy(false);
     }
@@ -377,6 +410,7 @@ export function Workspace() {
     setExplanation("");
     setExplainOpen(false);
     setGuestCapped(false);
+    setTurnNotice(null);
     setSearchParams({});
   }
 
@@ -710,12 +744,14 @@ export function Workspace() {
                       <Bot size={14} strokeWidth={1.5} />
                     </span>
                     <div className="rounded-2xl rounded-tl-sm border border-(--border) bg-(--surface-2) px-4 py-3">
-                      <ThinkingOrb
-                        state="working"
-                        size={32}
-                        theme="auto"
-                        aria-label="Mentor is thinking"
-                      />
+                      <div className="orb-halo">
+                        <ThinkingOrb
+                          state="working"
+                          size={32}
+                          theme="auto"
+                          aria-label="Mentor is thinking"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -731,6 +767,30 @@ export function Workspace() {
                   </div>
                 )}
               </div>
+              {turnNotice && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-(--border) px-3 py-2.5 text-[13px]" role="alert">
+                  <TriangleAlert size={15} strokeWidth={1.5} className="shrink-0 text-(--warning)" />
+                  <span className="min-w-0 flex-1 text-(--muted)">{turnNotice.message}</span>
+                  {turnNotice.retry && (
+                    <button
+                      type="button"
+                      onClick={() => void turnNotice.retry?.()}
+                      className="btn btn-ghost btn-sm"
+                      disabled={busy}
+                    >
+                      <RotateCcw size={13} strokeWidth={1.5} /> Retry
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setTurnNotice(null)}
+                    className="btn btn-ghost btn-sm px-2.5"
+                    aria-label="Dismiss"
+                  >
+                    <X size={13} strokeWidth={1.5} />
+                  </button>
+                </div>
+              )}
               <div className="flex min-w-0 gap-2 border-t border-(--border) p-3">
                 <input
                   className="input min-w-0"
@@ -746,10 +806,23 @@ export function Workspace() {
                 <button type="button" onClick={() => void send()} className="btn btn-primary btn-sm px-4" disabled={!inSession || busy || status !== "active"} aria-label="Send">
                   <Send size={15} strokeWidth={1.5} />
                 </button>
-                <button type="button" onClick={() => void askHint()} className="btn btn-ghost btn-sm" disabled={!inSession || busy || status !== "active"} aria-label="Ask for a hint">
-                  <Lightbulb size={15} strokeWidth={1.5} />
-                  <span className="hidden xl:inline">Hint</span>
-                </button>
+                {busy ? (
+                  <button
+                    type="button"
+                    onClick={cancelStream}
+                    className="btn btn-ghost btn-sm"
+                    aria-label="Stop generating"
+                    title="Stop generating"
+                  >
+                    <Square size={13} strokeWidth={2} />
+                    <span className="hidden xl:inline">Stop</span>
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => void askHint()} className="btn btn-ghost btn-sm" disabled={!inSession || status !== "active"} aria-label="Ask for a hint">
+                    <Lightbulb size={15} strokeWidth={1.5} />
+                    <span className="hidden xl:inline">Hint</span>
+                  </button>
+                )}
               </div>
               {inSession && status === "active" && (
                 <div className="border-t border-(--border) px-3 py-2.5">
@@ -762,21 +835,31 @@ export function Workspace() {
                     <ChevronDown size={15} strokeWidth={1.5} className={`transition-transform ${explainOpen ? "rotate-180" : ""}`} />
                     I fixed it — check my explanation
                   </button>
-                  {explainOpen && (
-                    <div className="flex flex-col gap-2 px-1 pb-1 pt-2">
-                      <textarea
-                        className="input min-h-20 resize-y"
-                        value={explanation}
-                        onChange={(e) => setExplanation(e.target.value)}
-                        placeholder="Explain the root cause and why your fix works, in your own words…"
-                        aria-label="Your explanation of the fix"
-                      />
-                      <button type="button" onClick={() => void submitExplanation()} className="btn btn-primary btn-sm self-end" disabled={explaining || !explanation.trim()}>
-                        {explaining ? <Loader2 size={14} strokeWidth={1.5} className="animate-spin" /> : <Check size={14} strokeWidth={1.5} />}
-                        {explaining ? "Judging…" : "Check my explanation"}
-                      </button>
-                    </div>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {explainOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: "easeOut" }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex flex-col gap-2 px-1 pb-1 pt-2">
+                          <textarea
+                            className="input min-h-20 resize-y"
+                            value={explanation}
+                            onChange={(e) => setExplanation(e.target.value)}
+                            placeholder="Explain the root cause and why your fix works, in your own words…"
+                            aria-label="Your explanation of the fix"
+                          />
+                          <button type="button" onClick={() => void submitExplanation()} className="btn btn-primary btn-sm self-end" disabled={explaining || !explanation.trim()}>
+                            {explaining ? <Loader2 size={14} strokeWidth={1.5} className="animate-spin" /> : <Check size={14} strokeWidth={1.5} />}
+                            {explaining ? "Judging…" : "Check my explanation"}
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
             </div>

@@ -8,7 +8,7 @@ from app.llm.anthropic import (
     extract_anthropic_usage,
 )
 from app.llm.base import BaseLLMProvider
-from app.llm.errors import LLMError, sanitize
+from app.llm.errors import LLMError
 from app.llm.gemini import extract_gemini_text, extract_gemini_usage
 from app.llm.manager import LLMManager
 from app.llm.openai_compat import (
@@ -80,11 +80,38 @@ class _Failer(BaseLLMProvider):
     name = "failer"
 
     def complete(self, *, system, messages, temperature=0.4):
-        raise LLMError(self.name, "rate_limit", "slow down")
+        raise LLMError(self.name, "server", "boom")
 
     def stream(self, *, system, messages, temperature=0.4):
         raise LLMError(self.name, "server", "broken")
         yield ""  # pragma: no cover - makes this a generator
+
+
+class _Flaky(BaseLLMProvider):
+    """Fails with the queued kinds, then succeeds. Counts its calls."""
+
+    name = "flaky"
+
+    def __init__(self, *kinds, retry_after=None):
+        self.kinds = list(kinds)
+        self.retry_after = retry_after
+        self.calls = 0
+
+    def _fail(self):
+        self.calls += 1
+        if self.kinds:
+            kind = self.kinds.pop(0)
+            raise LLMError(self.name, kind, "boom", retry_after=self.retry_after)
+
+    def complete(self, *, system, messages, temperature=0.4):
+        self._fail()
+        from app.llm.base import Completion
+
+        return Completion("done", None)
+
+    def stream(self, *, system, messages, temperature=0.4):
+        self._fail()
+        yield "a"
 
 
 class _Succeed(BaseLLMProvider):
@@ -131,6 +158,96 @@ def test_manager_raises_when_nothing_configured():
     with pytest.raises(LLMError) as exc_info:
         manager.complete(system="s", messages=[])
     assert exc_info.value.kind == "config"
+
+
+def test_manager_waits_retry_after_and_retries_rate_limit_once(monkeypatch):
+    sleeps: list[float] = []
+    monkeypatch.setattr("app.llm.manager._sleep", sleeps.append)
+    provider = _Flaky("rate_limit", retry_after=0.25)
+    manager = _manager_with([provider])
+    completion, name = manager.complete(system="s", messages=[])
+    assert (completion.text, name) == ("done", "flaky")
+    assert provider.calls == 2  # exactly one retry
+    assert sleeps == [0.25]  # Retry-After honoured
+
+
+def test_manager_caps_retry_after_and_defaults(monkeypatch):
+    sleeps: list[float] = []
+    monkeypatch.setattr("app.llm.manager._sleep", sleeps.append)
+    manager = _manager_with([_Flaky("timeout", retry_after=120)])
+    manager.complete(system="s", messages=[])
+    manager2 = _manager_with([_Flaky("rate_limit")])
+    manager2.complete(system="s", messages=[])
+    assert sleeps == [8.0, 1.5]  # capped value, then the brief default
+
+
+def test_manager_does_not_retry_deterministic_kinds(monkeypatch):
+    sleeps: list[float] = []
+    monkeypatch.setattr("app.llm.manager._sleep", sleeps.append)
+    provider = _Flaky("auth")
+    manager = _manager_with([provider])
+    with pytest.raises(LLMError) as exc_info:
+        manager.complete(system="s", messages=[])
+    assert exc_info.value.kind == "all_failed"
+    assert provider.calls == 1  # never retried
+    assert sleeps == []
+
+
+def test_manager_reports_busy_when_everything_is_rate_limited(monkeypatch):
+    monkeypatch.setattr("app.llm.manager._sleep", lambda _seconds: None)
+    first = _Flaky("rate_limit", "rate_limit", retry_after=0)
+    second = _Flaky("timeout", "timeout")
+    manager = _manager_with([first, second])
+    with pytest.raises(LLMError) as exc_info:
+        manager.complete(system="s", messages=[])
+    assert exc_info.value.kind == "rate_limit"  # -> 503 "mentor is busy"
+    assert first.calls == 2 and second.calls == 2
+
+
+def test_manager_stream_retries_rate_limit_before_first_chunk(monkeypatch):
+    sleeps: list[float] = []
+    monkeypatch.setattr("app.llm.manager._sleep", sleeps.append)
+    provider = _Flaky("rate_limit", retry_after=0.1)
+    manager = _manager_with([provider])
+    name, chunks = manager.stream(system="s", messages=[])
+    assert name == "flaky"
+    assert list(chunks) == ["a"]
+    assert provider.calls == 2
+    assert sleeps == [0.1]
+
+
+def test_retry_after_extraction_and_busy_mapping():
+    from app.errors import llm_error_to_http
+    from app.llm.groq_sdk import _map_sdk_error, _retry_after_from_exc
+
+    class _Resp:
+        headers = {"retry-after": "2.5"}
+
+    class _RateLimited(Exception):
+        status_code = 429
+
+    exc = _RateLimited()
+    exc.response = _Resp()
+    err = _map_sdk_error("groq", exc)
+    assert err.kind == "rate_limit"
+    assert err.retry_after == 2.5
+
+    bare = _RateLimited()
+    assert _retry_after_from_exc(bare) is None
+
+    class _BadResp:
+        headers = {"retry-after": "soon"}
+
+    bad = _RateLimited()
+    bad.response = _BadResp()
+    assert _retry_after_from_exc(bad) is None
+
+    assert llm_error_to_http(LLMError("groq", "rate_limit", "x")).status_code == 503
+    assert "busy" in llm_error_to_http(LLMError("groq", "timeout", "x")).detail
+    assert (
+        llm_error_to_http(LLMError("manager", "all_failed", "x")).detail
+        != llm_error_to_http(LLMError("groq", "rate_limit", "x")).detail
+    )
 
 
 def test_usage_extractors():

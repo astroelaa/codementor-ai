@@ -3,16 +3,17 @@
 import json
 import re
 
-from app.llm.base import Completion
 from app.llm.errors import LLMError
 from app.models import Message
 from app.schemas import MentorFeedback
 
 
-# Provider-call failures worth ONE second attempt: transient 5xx-style
-# errors and rate limits. auth/blocked/config failures are deterministic
-# and are never retried.
-PROVIDER_RETRY_KINDS = ("server", "timeout", "rate_limit", "all_failed")
+# Provider-call failures worth ONE immediate second attempt: transient
+# 5xx-style errors. Rate limits and timeouts are handled a layer down —
+# LLMManager waits briefly (honouring Retry-After, capped) and retries the
+# provider once — so they are never retried again here. Deterministic
+# failures (auth/blocked/config) are never retried.
+PROVIDER_RETRY_KINDS = ("server", "all_failed")
 
 
 def build_history(messages: list[Message], limit: int) -> list[dict]:

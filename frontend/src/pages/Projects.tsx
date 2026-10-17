@@ -296,7 +296,13 @@ export function Projects() {
                     disabled={briefBusy || briefText.trim().length < 10}
                     className="btn btn-ghost btn-sm mt-2"
                   >
-                    {briefBusy ? <ThinkingOrb state="composing" size={20} theme="auto" aria-label="Generating brief" /> : <Sparkles size={14} strokeWidth={1.5} />}
+                    {briefBusy ? (
+                      <span className="orb-halo orb-halo-sm">
+                        <ThinkingOrb state="composing" size={20} theme="auto" aria-label="Generating brief" />
+                      </span>
+                    ) : (
+                      <Sparkles size={14} strokeWidth={1.5} />
+                    )}
                     {briefBusy ? "Generating…" : "Generate brief + milestones"}
                   </button>
                 </div>

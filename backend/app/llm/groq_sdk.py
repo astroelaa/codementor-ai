@@ -13,13 +13,35 @@ from .base import BaseLLMProvider, ChatMessage, Completion
 from .errors import LLMError
 
 
+def _retry_after_from_exc(exc: Exception) -> float | None:
+    """Seconds from a Retry-After header, when present and sane."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None) or {}
+    try:
+        raw = headers.get("retry-after")
+    except Exception:  # defensive: unusual header containers
+        return None
+    if raw is None:
+        return None
+    try:
+        seconds = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds >= 0 else None
+
+
 def _map_sdk_error(provider: str, exc: Exception) -> LLMError:
     name = type(exc).__name__
     status = getattr(exc, "status_code", None)
     if name == "AuthenticationError" or status in (401, 403):
         return LLMError(provider, "auth", f"rejected ({status or name})")
     if name == "RateLimitError" or status == 429:
-        return LLMError(provider, "rate_limit", "rate limited")
+        return LLMError(
+            provider,
+            "rate_limit",
+            "rate limited",
+            retry_after=_retry_after_from_exc(exc),
+        )
     if name == "APITimeoutError":
         return LLMError(provider, "timeout", "request timed out")
     if name in ("APIConnectionError", "NotFoundError", "BadRequestError"):

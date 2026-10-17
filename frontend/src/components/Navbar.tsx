@@ -1,6 +1,7 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Bell,
   CheckCheck,
@@ -143,33 +144,43 @@ export function Navbar() {
                     </span>
                   )}
                 </button>
-                {bellOpen && (
-                  <div className="card absolute right-0 top-11 z-[90] max-h-80 w-80 overflow-y-auto p-2" role="dialog" aria-label="Notifications">
-                    <div className="flex items-center justify-between px-2 py-1.5">
-                      <span className="text-[13px] font-bold">Notifications</span>
-                      <button type="button" onClick={() => void readAll()} className="flex items-center gap-1 text-xs font-semibold text-(--muted) hover:text-(--text)">
-                        <CheckCheck size={13} strokeWidth={1.5} /> Mark all read
-                      </button>
-                    </div>
-                    {(notes.data ?? []).length === 0 ? (
-                      <p className="px-2 py-4 text-center text-[13px] text-(--muted)">
-                        {notes.isPending ? "Loading…" : "All caught up."}
-                      </p>
-                    ) : (
-                      (notes.data ?? []).slice(0, 8).map((n) => (
-                        <button
-                          key={n.id}
-                          type="button"
-                          onClick={() => void readOne(n.id)}
-                          className={`block w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-(--surface-2) ${n.read ? "opacity-60" : ""}`}
-                        >
-                          <span className="block text-[13px] font-semibold">{n.title}</span>
-                          {n.body && <span className="block text-xs text-(--muted)">{n.body}</span>}
+                <AnimatePresence>
+                  {bellOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      transition={{ duration: 0.16, ease: "easeOut" }}
+                      className="card absolute right-0 top-11 z-[90] max-h-80 w-80 overflow-y-auto p-2"
+                      role="dialog"
+                      aria-label="Notifications"
+                    >
+                      <div className="flex items-center justify-between px-2 py-1.5">
+                        <span className="text-[13px] font-bold">Notifications</span>
+                        <button type="button" onClick={() => void readAll()} className="flex items-center gap-1 text-xs font-semibold text-(--muted) hover:text-(--text)">
+                          <CheckCheck size={13} strokeWidth={1.5} /> Mark all read
                         </button>
-                      ))
-                    )}
-                  </div>
-                )}
+                      </div>
+                      {(notes.data ?? []).length === 0 ? (
+                        <p className="px-2 py-4 text-center text-[13px] text-(--muted)">
+                          {notes.isPending ? "Loading…" : "All caught up."}
+                        </p>
+                      ) : (
+                        (notes.data ?? []).slice(0, 8).map((n) => (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => void readOne(n.id)}
+                            className={`block w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-(--surface-2) ${n.read ? "opacity-60" : ""}`}
+                          >
+                            <span className="block text-[13px] font-semibold">{n.title}</span>
+                            {n.body && <span className="block text-xs text-(--muted)">{n.body}</span>}
+                          </button>
+                        ))
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
               <div className="relative" ref={accountRef}>
                 <button
@@ -190,39 +201,45 @@ export function Navbar() {
                     aria-hidden
                   />
                 </button>
-                {accountOpen && (
-                  <div
-                    className="card absolute right-0 top-11 z-[90] w-56 p-2"
-                    role="dialog"
-                    aria-label="Account"
-                  >
-                    <NavLink
-                      to="/profile"
-                      onClick={() => setAccountOpen(false)}
-                      className="block rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-colors hover:bg-(--surface-2)"
+                <AnimatePresence>
+                  {accountOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      transition={{ duration: 0.16, ease: "easeOut" }}
+                      className="card absolute right-0 top-11 z-[90] w-56 p-2"
+                      role="dialog"
+                      aria-label="Account"
                     >
-                      Profile & settings
-                    </NavLink>
-                    <NavLink
-                      to="/dashboard"
-                      onClick={() => setAccountOpen(false)}
-                      className="block rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-colors hover:bg-(--surface-2)"
-                    >
-                      Dashboard
-                    </NavLink>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAccountOpen(false);
-                        logout();
-                        navigate("/");
-                      }}
-                      className="block w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold text-(--muted) transition-colors hover:bg-(--surface-2)"
-                    >
-                      Log out
-                    </button>
-                  </div>
-                )}
+                      <NavLink
+                        to="/profile"
+                        onClick={() => setAccountOpen(false)}
+                        className="block rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-colors hover:bg-(--surface-2)"
+                      >
+                        Profile & settings
+                      </NavLink>
+                      <NavLink
+                        to="/dashboard"
+                        onClick={() => setAccountOpen(false)}
+                        className="block rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-colors hover:bg-(--surface-2)"
+                      >
+                        Dashboard
+                      </NavLink>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAccountOpen(false);
+                          logout();
+                          navigate("/");
+                        }}
+                        className="block w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold text-(--muted) transition-colors hover:bg-(--surface-2)"
+                      >
+                        Log out
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </>
           ) : (
@@ -246,57 +263,68 @@ export function Navbar() {
           </button>
         </div>
       </div>
-        {open && (
-        <nav className="border-t border-(--border) px-[4%] py-3 lg:hidden" aria-label="Mobile">
-          {LINKS.filter((l) => !l.anchor).map((l) => (
-            <NavLink
-              key={l.label}
-              to={l.to}
-              onClick={() => setOpen(false)}
-              className="block py-2.5 text-[15px] text-(--muted)"
+        <AnimatePresence>
+          {open && (
+            <motion.nav
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="overflow-hidden lg:hidden"
+              aria-label="Mobile"
             >
-              {l.label}
-            </NavLink>
-          ))}
-          {LINKS.filter((l) => l.anchor).map((l) => (
-            <AnchorLink
-              key={l.label}
-              to={l.to}
-              onDone={() => setOpen(false)}
-              className="block py-2.5 text-[15px] text-(--muted)"
-            >
-              {l.label}
-            </AnchorLink>
-          ))}
-          {user && (
-            <>
-              <NavLink
-                to="/profile"
-                onClick={() => setOpen(false)}
-                className="block py-2.5 text-[15px]"
-              >
-                Profile & settings
-              </NavLink>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  logout();
-                  navigate("/");
-                }}
-                className="block w-full py-2.5 text-left text-[15px] text-(--muted)"
-              >
-                Log out
-              </button>
-            </>
+              <div className="border-t border-(--border) px-[4%] py-3">
+                {LINKS.filter((l) => !l.anchor).map((l) => (
+                  <NavLink
+                    key={l.label}
+                    to={l.to}
+                    onClick={() => setOpen(false)}
+                    className="block py-2.5 text-[15px] text-(--muted)"
+                  >
+                    {l.label}
+                  </NavLink>
+                ))}
+                {LINKS.filter((l) => l.anchor).map((l) => (
+                  <AnchorLink
+                    key={l.label}
+                    to={l.to}
+                    onDone={() => setOpen(false)}
+                    className="block py-2.5 text-[15px] text-(--muted)"
+                  >
+                    {l.label}
+                  </AnchorLink>
+                ))}
+                {user && (
+                  <>
+                    <NavLink
+                      to="/profile"
+                      onClick={() => setOpen(false)}
+                      className="block py-2.5 text-[15px]"
+                    >
+                      Profile & settings
+                    </NavLink>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        logout();
+                        navigate("/");
+                      }}
+                      className="block w-full py-2.5 text-left text-[15px] text-(--muted)"
+                    >
+                      Log out
+                    </button>
+                  </>
+                )}
+                {!user && (
+                  <Link to="/login" onClick={() => setOpen(false)} className="block py-2.5 text-[15px]">
+                    Log in
+                  </Link>
+                )}
+              </div>
+            </motion.nav>
           )}
-          {!user && (
-            <Link to="/login" onClick={() => setOpen(false)} className="block py-2.5 text-[15px]">
-              Log in
-            </Link>
-          )}
-        </nav>
-      )}
+        </AnimatePresence>
     </header>
   );
 }

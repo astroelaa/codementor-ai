@@ -45,6 +45,7 @@ from app.services.email import EmailBackend, get_email_backend, solve_congrats_e
 from app.services.knowledge import citations, format_references
 from app.services.memory import build_project_context, build_session_recap
 from app.services.mentor import (
+    PROVIDER_RETRY_KINDS,
     build_history,
     complete_with_retry,
     extract_json_dict,
@@ -637,7 +638,10 @@ def post_message_stream(
                     system=sys_now, messages=history, temperature=0.4
                 )
             except LLMError as exc:
-                if attempt == 0:
+                # One app-level retry only for kinds the manager does not
+                # already retry itself (rate limits/timeouts wait-and-retry
+                # inside LLMManager, so retrying again here would hammer).
+                if attempt == 0 and exc.kind in PROVIDER_RETRY_KINDS:
                     reason = "transient"
                     continue
                 yield _sse("error", {"detail": llm_error_to_http(exc).detail})

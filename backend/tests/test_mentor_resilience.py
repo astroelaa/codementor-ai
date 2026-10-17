@@ -4,8 +4,10 @@ Covers the Phase 2 contract:
 - greeting is never assessed as an answer;
 - frustration is acknowledged, never treated as a correct answer, and the
   question is not repeated;
-- transient provider errors and non-JSON replies are retried exactly once
+- transient 5xx errors and non-JSON replies are retried exactly once
   before the error surfaces (normal + streaming);
+- exhausted rate limits/timeouts surface a clear 503 "mentor is busy"
+  without any further retry (the manager owns the wait-and-retry);
 - streaming strips a JSON-envelope reply and enforces no-repeat pre-emit.
 """
 
@@ -13,12 +15,7 @@ import json
 
 from app.llm.errors import LLMError
 from app.services.orchestration import classify_intent, turn_context_block
-from tests.conftest import (
-    PYTHON_CODE,
-    client,
-    fake_llm,  # noqa: F401
-    user_headers,  # noqa: F401
-)
+from tests.conftest import PYTHON_CODE, client
 from tests.fake_llm import MENTOR_JSON
 
 
@@ -187,6 +184,57 @@ def test_config_error_is_not_retried(user_headers, fake_llm):
     assert len(fake_llm.calls) - calls_before == 1  # deterministic failure
 
 
+# --- busy handling: exhausted rate limits/timeouts -> clear 503 -------------------
+def test_rate_limit_returns_busy_503_without_extra_retry(user_headers, fake_llm):
+    sid = _new_session(user_headers)
+    fake_llm.queue_complete_error(
+        LLMError("groq", "rate_limit", "slow down", retry_after=0.1)
+    )
+    calls_before = len(fake_llm.calls)
+    r = client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "Divide by zero?"},
+        headers=user_headers,
+    )
+    assert r.status_code == 503, r.text
+    assert r.json()["detail"] == "The mentor is busy right now. Try again in a moment."
+    # The manager owns wait-and-retry; the app must not retry again here.
+    assert len(fake_llm.calls) - calls_before == 1
+
+
+def test_timeout_maps_to_busy_503(user_headers, fake_llm):
+    sid = _new_session(user_headers)
+    fake_llm.queue_complete_error(LLMError("groq", "timeout", "too slow"))
+    r = client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "Divide by zero?"},
+        headers=user_headers,
+    )
+    assert r.status_code == 503, r.text
+    assert "busy" in r.json()["detail"]
+
+
+def test_stream_rate_limit_surfaces_busy_error_event(user_headers, fake_llm):
+    sid = _new_session(user_headers)
+    fake_llm.queue_stream_error(LLMError("groq", "rate_limit", "slow down"))
+    calls_before = len(fake_llm.calls)
+    r = client.post(
+        f"/api/sessions/{sid}/messages/stream",
+        json={"content": "Crash on empty."},
+        headers=user_headers,
+    )
+    assert r.status_code == 200, r.text  # SSE itself is a 200 with error events
+    events = _parse_sse(r.text)
+    assert events.get("error")
+    assert not events.get("done")
+    assert (
+        events["error"][0]["detail"]
+        == "The mentor is busy right now. Try again in a moment."
+    )
+    stream_calls = [c for c in fake_llm.calls[calls_before:] if c["kind"] == "stream"]
+    assert len(stream_calls) == 1  # no app-level retry hammering the limiter
+
+
 def test_frustration_repeat_retried_with_hint_of_fresh_question(user_headers, fake_llm):
     sid = _new_session(user_headers)
     r1 = client.post(
@@ -263,7 +311,6 @@ def test_stream_repeated_question_retried_before_any_token(user_headers, fake_ll
     fresh_text = "New angle: what is the value of the divisor when the list is empty?"
     fake_llm.queue_stream([repeated[:20], repeated[20:]])
     fake_llm.queue_stream([fresh_text[:25], fresh_text[25:]])
-    calls_before = len(fake_llm.calls)
     r = client.post(
         f"/api/sessions/{sid}/messages/stream",
         json={"content": "I think it averages 2, 4 and 6."},

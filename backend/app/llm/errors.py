@@ -17,6 +17,10 @@ class LLMError(Exception):
 
     kind: auth | rate_limit | server | timeout | parse | blocked |
           config | all_failed
+
+    retry_after: seconds until the provider suggests retrying (from a
+    Retry-After header when present) — advisory, used by the manager's
+    single wait-and-retry for rate limits and timeouts.
     """
 
     def __init__(
@@ -26,7 +30,9 @@ class LLMError(Exception):
         message: str,
         *,
         secrets: tuple[str, ...] = (),
+        retry_after: float | None = None,
     ) -> None:
         self.provider = provider
         self.kind = kind
+        self.retry_after = retry_after
         super().__init__(sanitize(message, secrets))

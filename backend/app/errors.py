@@ -23,10 +23,10 @@ def llm_error_to_http(exc: LLMError) -> HTTPException:
                 "configured or reachable. Try again later."
             ),
         )
-    if exc.kind == "rate_limit":
+    if exc.kind in ("rate_limit", "timeout"):
         return HTTPException(
             status_code=503,
-            detail="AI providers are rate-limited right now. Try again shortly.",
+            detail="The mentor is busy right now. Try again in a moment.",
         )
     return HTTPException(
         status_code=502,

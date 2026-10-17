@@ -105,7 +105,7 @@ body {
   border: 1px solid transparent;
   cursor: pointer;
   transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease,
-    opacity 0.15s ease;
+    opacity 0.15s ease, box-shadow 0.2s ease;
   white-space: nowrap;
 }
 .btn:active {
@@ -189,9 +189,13 @@ body {
 
 /* ---------- aurora background (landing hero only) ----------
    Two slow-drifting violet/indigo/cyan washes behind the hero content.
-   Pure CSS, pointer-transparent, static when reduced motion is on. */
+   Pure CSS, pointer-transparent, static when reduced motion is on.
+   --ax/--ay (-1..1) are set by <Aurora/> for a subtle pointer parallax;
+   they stay 0 when no pointer listener is attached. */
 .aurora {
   overflow: hidden;
+  transform: translate3d(calc(var(--ax, 0) * 14px), calc(var(--ay, 0) * 10px), 0);
+  will-change: transform;
 }
 .aurora::before,
 .aurora::after {
@@ -247,9 +251,44 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .aurora {
+    transform: none;
+    will-change: auto;
+  }
   .aurora::before,
   .aurora::after {
     animation: none;
+  }
+}
+
+/* ---------- thinking orb ----------
+   Soft halo behind the ThinkingOrb while a real request is in flight.
+   Breathes gently; the reduced-motion rule above freezes it. */
+.orb-halo {
+  position: relative;
+}
+.orb-halo::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, var(--glow), transparent 72%);
+  opacity: 0.55;
+  pointer-events: none;
+  animation: orb-halo-breathe 3.2s ease-in-out infinite alternate;
+}
+.orb-halo-sm::before {
+  inset: -6px;
+  opacity: 0.4;
+}
+@keyframes orb-halo-breathe {
+  from {
+    opacity: 0.35;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 0.7;
+    transform: scale(1.05);
   }
 }
 
