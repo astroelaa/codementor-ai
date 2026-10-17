@@ -99,8 +99,8 @@ it, add an explicit do-not-repeat rule, and retry once on detected repeat.
 |---|---|---|
 | `hello`, `good morning` (standing question exists) | greeting | Deterministic reply: warm opener + the bare standing question — no model call, never an assessment |
 | `what the hell`, `wtf`, `I give up` | frustration | Acknowledge + fresh re-entry question; verdict forced `off_target`; retry eligible |
-| `Y`, `yes`, `ok`, `no` | answer (short) | Labelled as a confirmation in the prompt: read against the last question, move forward, never re-ask |
-| `Y\nhi` (greeting line + answer) | answer | Greeting lines are stripped before classification; the prompt notes the greeting |
+| `Y`, `yes`, `no`, `ok`, `got it` | answer (short) | Deterministic push-forward reply ("walk me through it, step by step") — never reaches the model, never re-asks, cannot 502 |
+| `Y\nhi` (greeting line + answer) | answer | Greeting lines are stripped before classification; the push-forward reply starts with an acknowledgment of the greeting |
 | `give me a hint`, `I'm stuck` | hint_request | Hint-budget rule |
 | `explain this`, `I don't understand` | explanation_request | May explain (≤120 words) + check question; retry eligible |
 | fenced code / 2+ code lines | code_change | Code-updated flag in prompt |
@@ -115,9 +115,14 @@ it, add an explicit do-not-repeat rule, and retry once on detected repeat.
   (warm opener + the bare question, never nested templates). Live probes
   before the fix showed the model praising the loop and asking a brand-new
   question for a plain `hi`.
-- **Short replies are answers.** `Y`/`n`/`ok` used to be `unclear` (2-char
-  filter) and the model floundered; they now classify as `answer` with an
-  explicit short-confirmation clause.
+- **Short replies get a deterministic push-forward.** `Y`/`n`/`ok` used to
+  be `unclear` (2-char filter) and the model floundered — live it re-asked
+  the standing question reworded, or returned unusable JSON (502). They now
+  classify as `answer` and the backend composes the reply
+  (`compose_short_reply()`): one acknowledgment plus "walk me through it,
+  step by step" (yes/no/neutral wording pools, rotated by session seed; a
+  greeting typed alongside is acknowledged up front). No model call, so the
+  reply can never repeat the question, assess the student, or 502.
 - **Paraphrase repeats are caught.** `is_repeat` also compares content-token
   overlap (stopwords removed, lightly singularized) at ≥0.6 Jaccard, so
   "Did you consider…" vs "Have you thought about…" triggers the single

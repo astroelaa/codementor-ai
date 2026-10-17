@@ -113,6 +113,33 @@ def test_greeting_compose_restates_without_nesting():
     assert "correctly sums" not in third
 
 
+def test_compose_short_reply_pushes_forward():
+    from app.services.orchestration import (
+        compose_deterministic_reply,
+        compose_short_reply,
+    )
+
+    q = "What happens to len(numbers) when the list is empty?"
+    yes = compose_short_reply("Y", seed=0)
+    no = compose_short_reply("no", seed=0)
+    neutral = compose_short_reply("ok", seed=0)
+    # All pushes ask the student to articulate; none restate the question.
+    for reply in (yes, no, neutral):
+        assert "step by step" in reply.lower()
+        assert q not in reply
+    assert no != yes and neutral != yes
+    # A greeting typed alongside is acknowledged up front.
+    mixed = compose_short_reply("Y\nhi", seed=0)
+    assert mixed.startswith("Hi! ")
+    assert "step by step" in mixed.lower()
+    # Gating: only greetings/short replies with a standing question are.
+    assert compose_deterministic_reply("answer", "I think it crashes.", q) is None
+    assert compose_deterministic_reply("greeting", "hi", None) is None
+    assert compose_deterministic_reply("greeting", "hi", q) is not None
+    assert compose_deterministic_reply("answer", "Y", q, seed=0) == compose_short_reply("Y", seed=0)
+    assert compose_deterministic_reply("answer", "Y", None) is None
+
+
 def test_turn_context_block_flags_short_confirmation():
     block = turn_context_block(
         intent="answer", previous_question="Is the list empty here?",

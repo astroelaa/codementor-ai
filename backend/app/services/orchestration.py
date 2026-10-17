@@ -106,6 +106,67 @@ def compose_greeting_reply(previous_question: str | None, seed: int = 0) -> str:
     return f"{opener} {question[:300]}"
 
 
+YES_SHORT_RE = re.compile(
+    r"^(y|ye|yea|yeah|yep|yes|sure|right|fine)[!. ]*$", re.IGNORECASE
+)
+NO_SHORT_RE = re.compile(r"^(n|no|nope|nah)[!. ]*$", re.IGNORECASE)
+
+YES_PUSHES = (
+    "Great — walk me through it: what exactly happens in your code, step by step?",
+    "Nice — take me through what happens in your code, step by step.",
+    "Good. Now put it in your own words: what happens in your code, step by step?",
+)
+NO_PUSHES = (
+    "No problem — talk me through what your code does, step by step.",
+    "That is fine — walk me through what happens in your code, step by step.",
+    "No worries. Take me through your code, step by step — what happens first?",
+)
+NEUTRAL_PUSHES = (
+    "Alright — walk me through what happens in your code, step by step.",
+    "Got it. Take me through your thinking: what happens in your code, step by step?",
+    "Okay — talk me through what your code does, step by step.",
+)
+
+
+def compose_short_reply(student_text: str, seed: int = 0) -> str:
+    """Push-forward reply for a bare confirmation/denial ("Y", "no", "ok").
+
+    Live probes showed the model re-asking the standing question (reworded)
+    or returning unusable JSON for these; the mentoring move is the same
+    every time: acknowledge, then make the student articulate what happens.
+    Deterministic, so it can never repeat the question or assess anything.
+    A greeting typed alongside ("Y\\nhi") is acknowledged up front.
+    """
+    body, had_greeting = strip_greeting_lines((student_text or "").strip())
+    token = body or (student_text or "").strip()
+    if NO_SHORT_RE.match(token):
+        pool = NO_PUSHES
+    elif YES_SHORT_RE.match(token):
+        pool = YES_PUSHES
+    else:
+        pool = NEUTRAL_PUSHES
+    push = pool[seed % len(pool)]
+    return f"Hi! {push}" if had_greeting else push
+
+
+def compose_deterministic_reply(
+    intent: str, student_text: str, previous_question: str | None, seed: int = 0,
+) -> str | None:
+    """Reply composed by code for turns the model handles badly (live-tested).
+
+    Greetings keep the standing question in front of the student; bare
+    confirmations, denials and acknowledgments get a push-forward instead.
+    Returns None when the LLM path should handle the turn.
+    """
+    if intent == "greeting" and previous_question:
+        return compose_greeting_reply(previous_question, seed=seed)
+    if intent == "answer" and previous_question:
+        body, _had_greeting = strip_greeting_lines((student_text or "").strip())
+        if is_short_reply(body):
+            return compose_short_reply(student_text, seed=seed)
+    return None
+
+
 FRUSTRATION_RES = [
     re.compile(p, re.IGNORECASE)
     for p in (

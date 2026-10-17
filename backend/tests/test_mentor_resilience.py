@@ -3,8 +3,9 @@
 Covers the Phase 2 contract and the mentor-input fixes:
 - greetings get a deterministic reply (warm opener + standing question),
   never an assessment, a praise, or a brand-new question;
-- short confirmations ("Y", "ok") and greeting+answer mixes ("Y\\nhi")
-  route as answers and are carried into the prompt for the model;
+- short confirmations, denials and acknowledgments ("Y", "no", "ok",
+  "Y\\nhi") get a deterministic push-forward reply: no model call, never a
+  restatement of the standing question;
 - paraphrase repeats ("Did you consider..." vs "Have you thought...")
   are caught and retried exactly once;
 - transient 5xx errors and non-JSON replies are retried exactly once
@@ -135,28 +136,43 @@ def test_consecutive_greetings_do_not_nest(user_headers, fake_llm):
     assert g1 not in g2
 
 
-def test_short_confirmation_routes_as_answer(user_headers, fake_llm):
+def test_short_confirmation_gets_deterministic_push(user_headers, fake_llm):
     sid = _new_session(user_headers)
-    client.post(
+    first = client.post(
         f"/api/sessions/{sid}/messages",
         json={"content": "It crashes on empty lists."},
         headers=user_headers,
-    )
-    fresh = {
-        "reply": "Great. So what should average return for an empty list?",
-        "understanding_score": 30,
-    }
-    fake_llm.queue_complete(json.dumps(fresh))
+    ).json()
     calls_before = len(fake_llm.calls)
+    # "Y" never reaches the model: it gets acknowledge + articulate so it
+    # can never restate the standing question (live: it did, reworded) and
+    # can never burn the 502 "unusable response" path.
     r = client.post(
         f"/api/sessions/{sid}/messages", json={"content": "Y"}, headers=user_headers
     )
     assert r.status_code == 200, r.text
-    assert r.json()["reply"] == fresh["reply"]
-    complete_calls = [c for c in fake_llm.calls[calls_before:] if c["kind"] == "complete"]
-    assert len(complete_calls) == 1  # no repeat-retry needed
-    # The prompt told the model to read "Y" as a confirmation and move on.
-    assert "short confirmation" in complete_calls[0]["system"]
+    body = r.json()
+    assert "step by step" in body["reply"].lower()
+    assert first["reply"] not in body["reply"]
+    assert body["sources"] == []
+    assert body["next_topics"] == []
+    assert len(fake_llm.calls) == calls_before  # no model call at all
+    # "Y\nhi": same push, greeting acknowledged, still no model call.
+    mixed = client.post(
+        f"/api/sessions/{sid}/messages", json={"content": "Y\nhi"}, headers=user_headers
+    ).json()
+    assert mixed["reply"].startswith("Hi! ")
+    assert "step by step" in mixed["reply"].lower()
+    assert len(fake_llm.calls) == calls_before
+    # "ok" is an acknowledgment: neutral push, still deterministic.
+    ok = client.post(
+        f"/api/sessions/{sid}/messages", json={"content": "ok"}, headers=user_headers
+    ).json()
+    assert "step by step" in ok["reply"].lower()
+    assert len(fake_llm.calls) == calls_before
+    detail = client.get(f"/api/sessions/{sid}", headers=user_headers).json()
+    stored = [m for m in detail["messages"] if m["role"] == "assistant"]
+    assert stored[-1]["content"] == ok["reply"]
 
 
 def test_paraphrased_repeat_retried_once(user_headers, fake_llm):
@@ -178,7 +194,9 @@ def test_paraphrased_repeat_retried_once(user_headers, fake_llm):
     fake_llm.queue_complete(json.dumps(fresh))
     calls_before = len(fake_llm.calls)
     r = client.post(
-        f"/api/sessions/{sid}/messages", json={"content": "ok"}, headers=user_headers
+        f"/api/sessions/{sid}/messages",
+        json={"content": "The sum variable is never reset, I think."},
+        headers=user_headers,
     )
     assert r.status_code == 200, r.text
     assert r.json()["reply"] == fresh["reply"]  # the paraphrase never shipped
@@ -373,6 +391,28 @@ def test_stream_greeting_is_deterministic_and_free(user_headers, fake_llm):
     assert events["done"][0]["reply"] == token_text
     assert events["done"][0]["sources"] == []
     assert len(fake_llm.calls) == calls_before  # no model calls at all
+
+
+def test_stream_short_confirmation_is_deterministic(user_headers, fake_llm):
+    sid = _new_session(user_headers)
+    client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "It crashes on empty input."},
+        headers=user_headers,
+    )
+    calls_before = len(fake_llm.calls)
+    r = client.post(
+        f"/api/sessions/{sid}/messages/stream",
+        json={"content": "ok"},
+        headers=user_headers,
+    )
+    assert r.status_code == 200, r.text
+    events = _parse_sse(r.text)
+    token_text = "".join(t["text"] for t in events["token"])
+    assert "step by step" in token_text.lower()
+    assert events["done"][0]["reply"] == token_text
+    assert events["done"][0]["sources"] == []
+    assert len(fake_llm.calls) == calls_before
 
 
 def test_stream_json_envelope_is_stripped(user_headers, fake_llm):

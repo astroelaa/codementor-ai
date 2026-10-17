@@ -54,7 +54,7 @@ from app.services.mentor import (
 from app.services.orchestration import (
     RETRY_ELIGIBLE_INTENTS,
     classify_intent,
-    compose_greeting_reply,
+    compose_deterministic_reply,
     extract_code_block,
     is_repeat,
     previous_assistant_message,
@@ -379,27 +379,28 @@ def _mentor_reply(
     )
 
 
-def _greeting_turn_response(
+def _composed_turn_response(
     *,
     db: DbSession,
     request: Request,
     session: DebugSession,
     user: User | None,
-    previous_question: str,
+    reply: str,
+    verdict: str | None,
 ) -> MentorMessageResponse:
-    """Deterministic hello: no model call, no assessment, no new question.
+    """Deterministic-code turn: no model call, no assessment, no new area.
 
     Seen live: the model answered a greeting by praising the code and
-    asking about a new area. Composing the reply here guarantees the
-    greeting rule instead of hoping for it.
+    asking about a new area, and answered "Y" by re-asking the standing
+    question reworded (or by returning unusable JSON). Composing these
+    replies guarantees the mentoring move instead of hoping for it.
     """
     settings = request.app.state.settings
-    reply = compose_greeting_reply(previous_question, seed=len(session.messages))
     feedback = MentorFeedback(
         reply=reply,
         understanding_score=session.understanding_score,
         next_topics=[],
-        evaluation=EvaluationOut(verdict="greeting"),
+        evaluation=EvaluationOut(verdict=verdict) if verdict else None,
     )
     message, _ = _persist_assistant_turn(
         db,
@@ -587,13 +588,17 @@ def post_message(
         Message(session_id=session.id, role="user", content=content)
     )
     db.commit()
-    if turn["intent"] == "greeting" and turn["previous_question"]:
-        return _greeting_turn_response(
+    composed = compose_deterministic_reply(
+        turn["intent"], content, turn["previous_question"], seed=len(session.messages)
+    )
+    if composed is not None:
+        return _composed_turn_response(
             db=db,
             request=request,
             session=session,
             user=user,
-            previous_question=turn["previous_question"],
+            reply=composed,
+            verdict="greeting" if turn["intent"] == "greeting" else None,
         )
     history = build_history(session.messages, settings.history_window)
     recap, project_context = _memory_context(db, session)
@@ -671,13 +676,19 @@ def post_message_stream(
 
     def event_stream():
         prev_q = turn["previous_question"]
-        if turn["intent"] == "greeting" and prev_q:
-            reply_text = compose_greeting_reply(prev_q, seed=len(session.messages))
+        composed = compose_deterministic_reply(
+            turn["intent"], content, prev_q, seed=len(session.messages)
+        )
+        if composed is not None:
             feedback = MentorFeedback(
-                reply=reply_text,
+                reply=composed,
                 understanding_score=session.understanding_score,
                 next_topics=[],
-                evaluation=EvaluationOut(verdict="greeting"),
+                evaluation=(
+                    EvaluationOut(verdict="greeting")
+                    if turn["intent"] == "greeting"
+                    else None
+                ),
             )
             try:
                 message, _ = _persist_assistant_turn(
@@ -694,11 +705,11 @@ def post_message_stream(
                 db.rollback()
                 yield _sse("error", {"detail": "Could not save the mentor reply."})
                 return
-            yield _sse("token", {"text": reply_text})
+            yield _sse("token", {"text": composed})
             yield _sse(
                 "done",
                 {
-                    "reply": reply_text,
+                    "reply": composed,
                     "understanding_score": feedback.understanding_score,
                     "hints_left": _hints_left(settings, session),
                     "misconception": None,
