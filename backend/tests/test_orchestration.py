@@ -105,6 +105,12 @@ def test_greeting_compose_restates_without_nesting():
     second = compose_greeting_reply(first, seed=1)
     assert second.count(q) == 1
     assert first not in second
+    # Multi-sentence replies: only the final question is restated, so
+    # earlier praise ("your loop is correct") cannot leak into a greeting.
+    multi = "Your loop correctly sums the elements. What happens when the input is empty?"
+    third = compose_greeting_reply(multi, seed=2)
+    assert "What happens when the input is empty?" in third
+    assert "correctly sums" not in third
 
 
 def test_turn_context_block_flags_short_confirmation():

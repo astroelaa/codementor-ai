@@ -78,15 +78,29 @@ def _strip_known_openers(text: str) -> str:
     return cleaned
 
 
+_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
+
+
+def _last_question(text: str) -> str:
+    """The final question sentence of a mentor message, when there is one."""
+    cleaned = (text or "").strip()
+    if not cleaned or "?" not in cleaned:
+        return cleaned
+    parts = [p.strip() for p in _SENT_SPLIT.split(cleaned) if p.strip()]
+    questions = [p for p in parts if "?" in p]
+    return questions[-1] if questions else cleaned
+
+
 def compose_greeting_reply(previous_question: str | None, seed: int = 0) -> str:
     """Deterministic greeting: warm opener + the standing question.
 
     A hello can then never be assessed as an answer, praised, or answered
     with a brand-new question; consecutive greetings reuse the bare
-    question instead of nesting templates.
+    question instead of nesting templates, and only the previous reply's
+    final question is restated.
     """
     opener = GREETING_OPENERS[seed % len(GREETING_OPENERS)]
-    question = _strip_known_openers(previous_question or "")
+    question = _last_question(_strip_known_openers(previous_question or ""))
     if not question:
         return f"{opener} Ready to keep going?"
     return f"{opener} {question[:300]}"
