@@ -122,7 +122,7 @@ function Shell() {
           >
             <Suspense
               fallback={
-                <div className="mx-auto flex w-[min(1200px,92%)] flex-col gap-3 py-20" aria-label="Loading page">
+                <div className="mx-auto flex min-h-screen w-[min(1200px,92%)] flex-col gap-3 py-20" aria-label="Loading page">
                   <div className="skeleton h-8 w-1/3" />
                   <div className="skeleton h-4 w-2/3" />
                   <div className="skeleton h-4 w-1/2" />
