@@ -15,6 +15,8 @@ import { ThemeProvider } from "./lib/theme";
 import { ToastProvider, useToast } from "./lib/toast";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
+import { InstallBanner } from "./components/InstallBanner";
+import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary";
 import "./index.css";
 
 const Landing = lazy(() =>
@@ -58,6 +60,9 @@ const LegalPrivacy = lazy(() =>
 );
 const LegalTerms = lazy(() =>
   import("./pages/Legal").then((m) => ({ default: m.Terms })),
+);
+const About = lazy(() =>
+  import("./pages/About").then((m) => ({ default: m.About })),
 );
 
 const queryClient = new QueryClient({
@@ -120,33 +125,40 @@ function Shell() {
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.18, ease: "easeOut" }}
           >
-            <Suspense
-              fallback={
-                <div className="mx-auto flex min-h-screen w-[min(1200px,92%)] flex-col gap-3 py-20" aria-label="Loading page">
-                  <div className="skeleton h-8 w-1/3" />
-                  <div className="skeleton h-4 w-2/3" />
-                  <div className="skeleton h-4 w-1/2" />
-                </div>
-              }
+            <ErrorBoundary
+              key={pathname}
+              fallback={<RouteErrorFallback />}
+              onError={(error) => console.error("route render failed:", error)}
             >
-              <Routes>
-                <Route path="/" element={<Landing />} />
-                <Route path="/app" element={<Workspace />} />
-                <Route path="/projects" element={<Projects />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/history" element={<History />} />
-                <Route path="/docs" element={<Docs />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/verify" element={<Verify />} />
-                <Route path="/forgot" element={<Forgot />} />
-                <Route path="/reset" element={<Reset />} />
-                <Route path="/privacy" element={<LegalPrivacy />} />
-                <Route path="/terms" element={<LegalTerms />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
+              <Suspense
+                fallback={
+                  <div className="mx-auto flex min-h-screen w-[min(1200px,92%)] flex-col gap-3 py-20" aria-label="Loading page">
+                    <div className="skeleton h-8 w-1/3" />
+                    <div className="skeleton h-4 w-2/3" />
+                    <div className="skeleton h-4 w-1/2" />
+                  </div>
+                }
+              >
+                <Routes>
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/app" element={<Workspace />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/history" element={<History />} />
+                  <Route path="/docs" element={<Docs />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<Signup />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/verify" element={<Verify />} />
+                  <Route path="/forgot" element={<Forgot />} />
+                  <Route path="/reset" element={<Reset />} />
+                  <Route path="/privacy" element={<LegalPrivacy />} />
+                  <Route path="/terms" element={<LegalTerms />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </div>
@@ -164,7 +176,11 @@ createRoot(document.getElementById("root")!).render(
             <MotionConfig reducedMotion="user">
               <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <ScrollToTop />
-                <PwaStatus />
+                {/* Service worker registration is production-only: in dev the
+                    register hook is a no-op and this component is not even
+                    mounted, so no worker is registered or checked. */}
+                {import.meta.env.PROD && <PwaStatus />}
+                <InstallBanner />
                 <Shell />
               </HashRouter>
             </MotionConfig>

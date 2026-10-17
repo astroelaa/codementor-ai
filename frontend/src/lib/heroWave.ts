@@ -18,6 +18,9 @@ export function useWaveEligible(): boolean {
 
     try {
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      // Offline starts use the static gradient immediately: the wave chunk
+      // is intentionally not precached, so fetching it would only fail.
+      if (!navigator.onLine) return;
       const nav = navigator as Navigator & {
         deviceMemory?: number;
         connection?: { saveData?: boolean };

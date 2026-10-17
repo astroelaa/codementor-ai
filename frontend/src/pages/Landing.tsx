@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight,
   Check,
+  Download,
   Flame,
   Lightbulb,
   MessagesSquare,
@@ -14,14 +15,24 @@ import {
 import { AnchorLink } from "../components/AnchorLink";
 import { Aurora } from "../components/Aurora";
 import { Counter } from "../components/Counter";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { Faq } from "../components/Faq";
 import { Reveal } from "../components/Reveal";
 import { LogoMark } from "../components/Logo";
 import { useWaveEligible } from "../lib/heroWave";
+import { IOS_INSTALL_HINT, useInstall } from "../lib/install";
+import { useToast } from "../lib/toast";
 
-// three.js lives behind this dynamic import: it stays a separate lazy chunk
-// and never touches the main bundle.
-const Wave = lazy(() => import("../components/Wave"));
+// three.js lives behind this dynamic import: it stays a separate lazy chunk,
+// it is deliberately NOT precached by the service worker, and it never
+// touches the main bundle. A failed chunk fetch (offline start, or a deploy
+// that rotated hashes while this tab stayed open) resolves to the static
+// gradient instead of throwing — the hero must never depend on the chunk.
+const Wave = lazy(() =>
+  import("../components/Wave").catch(() => ({
+    default: () => <div className="hero-wave-static" />,
+  })),
+);
 
 /* ---------- hero product mockup (static, representative) ---------- */
 function HeroMockup() {
@@ -164,6 +175,19 @@ const FAQS = [
 
 export function Landing() {
   const waveEligible = useWaveEligible();
+  const { installed, prompt, isIOS } = useInstall();
+  const toast = useToast();
+
+  async function install() {
+    if (isIOS) {
+      toast("info", IOS_INSTALL_HINT);
+      return;
+    }
+    const shown = await prompt();
+    if (!shown)
+      toast("info", 'Open your browser menu and choose "Install app" (or "Add to Home Screen").');
+  }
+
   return (
     <main>
       {/* ---------- hero ---------- */}
@@ -176,9 +200,11 @@ export function Landing() {
           aria-hidden="true"
         >
           {waveEligible ? (
-            <Suspense fallback={null}>
-              <Wave />
-            </Suspense>
+            <ErrorBoundary fallback={<div className="hero-wave-static" />}>
+              <Suspense fallback={null}>
+                <Wave />
+              </Suspense>
+            </ErrorBoundary>
           ) : (
             <div className="hero-wave-static" />
           )}
@@ -214,7 +240,17 @@ export function Landing() {
                 <AnchorLink to="/#how" className="btn btn-ghost px-7 py-3.5 text-base">
                   See how it works
                 </AnchorLink>
+                {!installed && (
+                  <button type="button" onClick={() => void install()} className="btn btn-ghost px-7 py-3.5 text-base">
+                    <Download size={17} strokeWidth={1.5} /> Install app
+                  </button>
+                )}
               </div>
+              <p className="mt-3 text-[13px] text-(--faint)">
+                Free to try with no account. The app can be installed to your
+                device — it opens full screen and starts without internet; the
+                mentor needs a connection.
+              </p>
             </Reveal>
             <Reveal delay={0.2}>
               <div className="mt-10 flex flex-wrap gap-x-10 gap-y-6">
