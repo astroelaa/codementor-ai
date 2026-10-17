@@ -53,24 +53,19 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // App shell is precached. API traffic is NEVER cached: no tokens,
-        // no private conversations, no cross-user leaks through the cache.
-        // The decorative three.js wave chunk is excluded from the precache:
-        // it is lazy-loaded on demand and never needed for offline starts.
+        // App shell is precached (including the self-hosted font files so
+        // the app renders with Inter offline). API traffic is NEVER cached:
+        // no tokens, no private conversations, no cross-user leaks through
+        // the cache. The decorative three.js wave chunk is excluded from the
+        // precache: it is lazy-loaded on demand and never needed for offline
+        // starts.
+        globPatterns: ["**/*.{js,css,html,woff2}"],
         globIgnores: ["**/Wave-*.js"],
         navigateFallback: `${BASE}index.html`,
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
             handler: "NetworkOnly",
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "fonts",
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
           },
         ],
       },
