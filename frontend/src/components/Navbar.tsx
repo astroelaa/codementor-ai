@@ -247,7 +247,7 @@ export function Navbar() {
               <Link to="/login" className="btn btn-ghost btn-sm hidden sm:inline-flex">
                 Log in
               </Link>
-              <Link to="/app" className="btn btn-primary btn-sm max-[420px]:hidden">
+              <Link to="/app" className="btn btn-primary btn-sm nav-cta-sm">
                 Try it free
               </Link>
             </>

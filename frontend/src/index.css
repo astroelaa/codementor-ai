@@ -171,6 +171,14 @@ body {
   cursor: not-allowed;
   transform: none;
 }
+/* Very small screens: drop the navbar CTA so the header row never scrolls
+   sideways. The old max-[420px]:hidden utility never shipped any CSS, which
+   left ~40px of horizontal overflow on phones. */
+@media (max-width: 459px) {
+  .nav-cta-sm {
+    display: none;
+  }
+}
 .btn-primary {
   background: linear-gradient(135deg, #6a4cf2, #5b3df5);
   color: #fff;
