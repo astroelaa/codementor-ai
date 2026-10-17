@@ -62,6 +62,11 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,woff2}"],
         globIgnores: ["**/Wave-*.js"],
         navigateFallback: `${BASE}index.html`,
+        // API and auth/OAuth callback paths must always reach the network;
+        // serving them the cached shell would swallow a code exchange.
+        // (The app is hash-routed today, but this keeps the worker honest
+        // if a path-based provider callback is ever added.)
+        navigateFallbackDenylist: [/^\/api\//, /\/auth\//, /\/oauth/],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/api/"),

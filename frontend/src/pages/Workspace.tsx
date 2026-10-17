@@ -21,6 +21,7 @@ import {
   Square,
   Tag,
   TriangleAlert,
+  WifiOff,
   X,
 } from "lucide-react";
 import { CodeEditor } from "../components/CodeEditor";
@@ -97,6 +98,22 @@ export function Workspace() {
     message: string;
     retry: (() => Promise<void>) | null;
   } | null>(null);
+  // Mentor features need the backend; the editor itself does not. Track the
+  // connection so the UI can say exactly what still works offline.
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
 
   const abortRef = useRef<AbortController | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -297,9 +314,17 @@ export function Workspace() {
     }
   }
 
+  function offlineNotice() {
+    toast("info", "You're offline — the mentor needs a connection. Your code stays here.");
+  }
+
   async function start() {
     if (API_MISCONFIGURED) {
       toast("error", "The app is not connected to its backend (API URL is not configured).");
+      return;
+    }
+    if (!online) {
+      offlineNotice();
       return;
     }
     if (!code.trim()) {
@@ -337,6 +362,10 @@ export function Workspace() {
   async function send() {
     const content = input.trim();
     if (!content || busy || !sessionId || status !== "active") return;
+    if (!online) {
+      offlineNotice();
+      return;
+    }
     setInput("");
     setMessages((m) => [...m, { id: `u-${Date.now()}`, role: "user", content }]);
     await runStream(sessionId, content, code);
@@ -344,6 +373,10 @@ export function Workspace() {
 
   async function askHint(isRetry = false) {
     if (busy || !sessionId || status !== "active") return;
+    if (!online && !isRetry) {
+      offlineNotice();
+      return;
+    }
     if (!isRetry && hintsLeft <= 0) {
       toast("info", "No hints left in this session. Reason it out.");
       return;
@@ -368,6 +401,10 @@ export function Workspace() {
   async function submitExplanation() {
     const text = explanation.trim();
     if (!text || explaining || !sessionId || status !== "active") return;
+    if (!online) {
+      offlineNotice();
+      return;
+    }
     setExplaining(true);
     setMessages((m) => [...m, { id: `u-${Date.now()}`, role: "user", content: text }]);
     try {
@@ -501,12 +538,26 @@ export function Workspace() {
               <span className="text-(--danger)">Backend not configured — the mentor cannot reach its API. Set <span className="font-mono">VITE_API_BASE_URL</span> and rebuild.</span>
             </div>
           )}
-          {serverUnreachable && (
-            <div className="card flex flex-wrap items-center gap-3 border-(--warning) px-5 py-3.5 text-sm lg:col-span-2 xl:col-span-3" role="status">
-              <Loader2 size={16} strokeWidth={1.5} className="animate-spin text-(--warning)" />
+          {!online && (
+            <div
+              className="card flex flex-wrap items-center gap-3 border-(--warning) px-5 py-3.5 text-sm lg:col-span-2 xl:col-span-3"
+              role="status"
+            >
+              <WifiOff size={16} strokeWidth={1.5} className="shrink-0 text-(--warning)" />
               <span className="text-(--muted)">
-                The mentor server is unreachable — free hosting puts it to sleep
-                when idle, and waking takes about a minute.
+                You&rsquo;re offline — the editor and your code still work, but the
+                mentor needs a connection for replies. Everything resumes when
+                you&rsquo;re back online.
+              </span>
+            </div>
+          )}
+          {online && serverUnreachable && (
+            <div className="card flex flex-wrap items-center gap-3 border-(--warning) px-5 py-3.5 text-sm lg:col-span-2 xl:col-span-3" role="status">
+              <TriangleAlert size={16} strokeWidth={1.5} className="shrink-0 text-(--warning)" />
+              <span className="text-(--muted)">
+                Can&rsquo;t reach the mentor server. Check your connection — if
+                you&rsquo;re online, the service may be briefly unavailable. Your
+                code is safe here.
               </span>
               <button
                 type="button"
@@ -803,7 +854,7 @@ export function Workspace() {
                   disabled={!inSession || busy || status !== "active"}
                   aria-label="Your reasoning"
                 />
-                <button type="button" onClick={() => void send()} className="btn btn-primary btn-sm px-4" disabled={!inSession || busy || status !== "active"} aria-label="Send">
+                <button type="button" onClick={() => void send()} className="btn btn-primary btn-sm px-4" disabled={!inSession || busy || status !== "active" || !online} aria-label="Send">
                   <Send size={15} strokeWidth={1.5} />
                 </button>
                 {busy ? (
@@ -818,7 +869,7 @@ export function Workspace() {
                     <span className="hidden xl:inline">Stop</span>
                   </button>
                 ) : (
-                  <button type="button" onClick={() => void askHint()} className="btn btn-ghost btn-sm" disabled={!inSession || status !== "active"} aria-label="Ask for a hint">
+                  <button type="button" onClick={() => void askHint()} className="btn btn-ghost btn-sm" disabled={!inSession || status !== "active" || !online} aria-label="Ask for a hint">
                     <Lightbulb size={15} strokeWidth={1.5} />
                     <span className="hidden xl:inline">Hint</span>
                   </button>

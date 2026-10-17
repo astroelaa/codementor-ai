@@ -7,6 +7,7 @@ const COLUMNS: { title: string; links: { label: string; to: string; anchor?: boo
     title: "Product",
     links: [
       { label: "Demo", to: "/app" },
+      { label: "About", to: "/about" },
       { label: "Features", to: "/#features", anchor: true },
       { label: "FAQ", to: "/#faq", anchor: true },
     ],

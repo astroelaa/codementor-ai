@@ -6,6 +6,7 @@ import {
   Bell,
   CheckCheck,
   ChevronDown,
+  Download,
   Menu,
   Moon,
   Sun,
@@ -17,13 +18,18 @@ import { Logo } from "./Logo";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/theme";
+import { IOS_INSTALL_HINT, useInstall } from "../lib/install";
+import { useToast } from "../lib/toast";
 
-const LINKS = [
+const LINKS: { to: string; label: string; anchor: boolean; xlOnly?: boolean }[] = [
   { to: "/app", label: "Demo", anchor: false },
   { to: "/projects", label: "Projects", anchor: false },
   { to: "/dashboard", label: "Dashboard", anchor: false },
   { to: "/history", label: "History", anchor: false },
   { to: "/docs", label: "Docs", anchor: false },
+  // Shown from xl up: at exactly 1024px the lg row (with the install
+  // button) would overflow the container. Below xl the footer links here.
+  { to: "/about", label: "About", anchor: false, xlOnly: true },
   { to: "/#method", label: "Method", anchor: true },
   { to: "/#features", label: "Features", anchor: true },
   { to: "/#faq", label: "FAQ", anchor: true },
@@ -32,12 +38,24 @@ const LINKS = [
 export function Navbar() {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
+  const { installed, prompt, isIOS } = useInstall();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  async function install() {
+    if (isIOS) {
+      toast("info", IOS_INSTALL_HINT);
+      return;
+    }
+    const shown = await prompt();
+    if (!shown)
+      toast("info", 'Open your browser menu and choose "Install app" (or "Add to Home Screen").');
+  }
 
   useEffect(() => {
     if (!accountOpen) return;
@@ -97,13 +115,13 @@ export function Navbar() {
         <Link to="/" aria-label="CodeMentor AI home">
           <Logo />
         </Link>
-        <nav className="ml-6 hidden items-center gap-5 lg:flex" aria-label="Primary">
+        <nav className="ml-6 hidden items-center gap-4 lg:flex xl:gap-5" aria-label="Primary">
           {LINKS.map((l) =>
             l.anchor ? (
               <AnchorLink
                 key={l.label}
                 to={l.to}
-                className="text-sm text-(--muted) transition-colors hover:text-(--text)"
+                className={`text-sm text-(--muted) transition-colors hover:text-(--text)${l.xlOnly ? " hidden xl:block" : ""}`}
               >
                 {l.label}
               </AnchorLink>
@@ -111,7 +129,7 @@ export function Navbar() {
               <NavLink
                 key={l.label}
                 to={l.to}
-                className="text-sm text-(--muted) transition-colors hover:text-(--text)"
+                className={`text-sm text-(--muted) transition-colors hover:text-(--text)${l.xlOnly ? " hidden xl:block" : ""}`}
               >
                 {l.label}
               </NavLink>
@@ -119,6 +137,17 @@ export function Navbar() {
           )}
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          {!installed && (
+            <button
+              type="button"
+              onClick={() => void install()}
+              aria-label="Install app"
+              title="Install app"
+              className="grid size-9 place-items-center rounded-[10px] border border-(--border) text-(--muted) transition-colors hover:text-(--text)"
+            >
+              <Download size={17} strokeWidth={1.5} />
+            </button>
+          )}
           <button
             type="button"
             onClick={toggle}
@@ -320,6 +349,18 @@ export function Navbar() {
                   <Link to="/login" onClick={() => setOpen(false)} className="block py-2.5 text-[15px]">
                     Log in
                   </Link>
+                )}
+                {!installed && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      void install();
+                    }}
+                    className="block w-full py-2.5 text-left text-[15px] text-(--muted)"
+                  >
+                    Install app
+                  </button>
                 )}
               </div>
             </motion.nav>
