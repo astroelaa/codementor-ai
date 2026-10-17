@@ -9,6 +9,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { AuthProvider } from "./lib/auth";
 import { ThemeProvider } from "./lib/theme";
 import { ToastProvider, useToast } from "./lib/toast";
@@ -102,37 +103,52 @@ function PwaStatus() {
 }
 
 function Shell() {
+  const { pathname } = useLocation();
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
       <div className="flex-1">
-        <Suspense
-          fallback={
-            <div className="mx-auto flex w-[min(1200px,92%)] flex-col gap-3 py-20" aria-label="Loading page">
-              <div className="skeleton h-8 w-1/3" />
-              <div className="skeleton h-4 w-2/3" />
-              <div className="skeleton h-4 w-1/2" />
-            </div>
-          }
-        >
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/app" element={<Workspace />} />
-            <Route path="/projects" element={<Projects />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/docs" element={<Docs />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/verify" element={<Verify />} />
-            <Route path="/forgot" element={<Forgot />} />
-            <Route path="/reset" element={<Reset />} />
-            <Route path="/privacy" element={<LegalPrivacy />} />
-            <Route path="/terms" element={<LegalTerms />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        {/* Restrained page transition: a short fade with a couple of pixels
+            of travel, keyed by pathname so anchor scrolls do not remount.
+            MotionConfig reducedMotion="user" turns all of this into a
+            plain fade for reduced-motion users. */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <Suspense
+              fallback={
+                <div className="mx-auto flex w-[min(1200px,92%)] flex-col gap-3 py-20" aria-label="Loading page">
+                  <div className="skeleton h-8 w-1/3" />
+                  <div className="skeleton h-4 w-2/3" />
+                  <div className="skeleton h-4 w-1/2" />
+                </div>
+              }
+            >
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/app" element={<Workspace />} />
+                <Route path="/projects" element={<Projects />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/history" element={<History />} />
+                <Route path="/docs" element={<Docs />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/verify" element={<Verify />} />
+                <Route path="/forgot" element={<Forgot />} />
+                <Route path="/reset" element={<Reset />} />
+                <Route path="/privacy" element={<LegalPrivacy />} />
+                <Route path="/terms" element={<LegalTerms />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </motion.div>
+        </AnimatePresence>
       </div>
       <Footer />
     </div>
@@ -145,11 +161,13 @@ createRoot(document.getElementById("root")!).render(
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>
-            <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-              <ScrollToTop />
-              <PwaStatus />
-              <Shell />
-            </HashRouter>
+            <MotionConfig reducedMotion="user">
+              <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <ScrollToTop />
+                <PwaStatus />
+                <Shell />
+              </HashRouter>
+            </MotionConfig>
           </ToastProvider>
         </AuthProvider>
       </ThemeProvider>
