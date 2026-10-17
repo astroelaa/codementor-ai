@@ -123,6 +123,12 @@ it, add an explicit do-not-repeat rule, and retry once on detected repeat.
   step by step" (yes/no/neutral wording pools, rotated by session seed; a
   greeting typed alongside is acknowledged up front). No model call, so the
   reply can never repeat the question, assess the student, or 502.
+- **The standing question survives questionless turns.**
+  `previous_question_message()` finds the last mentor message that actually
+  asked something, so after deterministic "walk me through it" pushes the
+  model still evaluates the student's answer against the real question
+  (live: without this, a valid attempt was marked `off_target` and the
+  opening question came back reworded).
 - **Paraphrase repeats are caught.** `is_repeat` also compares content-token
   overlap (stopwords removed, lightly singularized) at ≥0.6 Jaccard, so
   "Did you consider…" vs "Have you thought about…" triggers the single

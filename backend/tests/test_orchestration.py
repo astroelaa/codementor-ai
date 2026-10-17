@@ -140,6 +140,30 @@ def test_compose_short_reply_pushes_forward():
     assert compose_deterministic_reply("answer", "Y", None) is None
 
 
+def test_previous_question_message_skips_pushes():
+    from app.services.orchestration import previous_question_message
+
+    class _Msg:
+        def __init__(self, role, content):
+            self.role = role
+            self.content = content
+
+    class _Session:
+        def __init__(self, messages):
+            self.messages = messages
+
+    session = _Session([
+        _Msg("user", "Here is my code."),
+        _Msg("assistant", "What happens here?"),
+        _Msg("user", "Y"),
+        _Msg("assistant", "Walk me through it, step by step."),
+    ])
+    found = previous_question_message(session)
+    assert found is not None and found.content == "What happens here?"
+    only_push = _Session([_Msg("assistant", "Walk me through it, step by step.")])
+    assert previous_question_message(only_push) is None
+
+
 def test_turn_context_block_flags_short_confirmation():
     block = turn_context_block(
         intent="answer", previous_question="Is the list empty here?",

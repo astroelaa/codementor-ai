@@ -175,6 +175,28 @@ def test_short_confirmation_gets_deterministic_push(user_headers, fake_llm):
     assert stored[-1]["content"] == ok["reply"]
 
 
+def test_standing_question_survives_deterministic_pushes(user_headers, fake_llm):
+    """After 'Y' pushes (no question), answers are still evaluated against
+    the last real question — live the model otherwise re-anchored on the
+    opening question and marked a valid attempt off_target."""
+    sid = _new_session(user_headers)
+    first = client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "It crashes on empty lists."},
+        headers=user_headers,
+    ).json()
+    client.post(
+        f"/api/sessions/{sid}/messages", json={"content": "Y"}, headers=user_headers
+    )
+    client.post(
+        f"/api/sessions/{sid}/messages",
+        json={"content": "I think the sum variable is never reset."},
+        headers=user_headers,
+    )
+    system = [c for c in fake_llm.calls if c["kind"] == "complete"][-1]["system"]
+    assert f'The last question you asked was: "{first["reply"]}"' in system
+
+
 def test_paraphrased_repeat_retried_once(user_headers, fake_llm):
     sid = _new_session(user_headers)
     q = "Did you consider what happens when the list is empty?"

@@ -112,18 +112,18 @@ YES_SHORT_RE = re.compile(
 NO_SHORT_RE = re.compile(r"^(n|no|nope|nah)[!. ]*$", re.IGNORECASE)
 
 YES_PUSHES = (
-    "Great — walk me through it: what exactly happens in your code, step by step?",
+    "Great — walk me through it: what exactly happens in your code, step by step.",
     "Nice — take me through what happens in your code, step by step.",
-    "Good. Now put it in your own words: what happens in your code, step by step?",
+    "Good. Now put it in your own words: what happens in your code, step by step.",
 )
 NO_PUSHES = (
     "No problem — talk me through what your code does, step by step.",
     "That is fine — walk me through what happens in your code, step by step.",
-    "No worries. Take me through your code, step by step — what happens first?",
+    "No worries. Take me through your code, step by step — what happens first.",
 )
 NEUTRAL_PUSHES = (
     "Alright — walk me through what happens in your code, step by step.",
-    "Got it. Take me through your thinking: what happens in your code, step by step?",
+    "Got it. Take me through your thinking: what happens in your code, step by step.",
     "Okay — talk me through what your code does, step by step.",
 )
 
@@ -263,6 +263,20 @@ def previous_assistant_message(session: DebugSession) -> Message | None:
     """Most recent assistant message, i.e. the last question asked."""
     for message in reversed(session.messages):
         if message.role == "assistant" and (message.content or "").strip():
+            return message
+    return None
+
+
+def previous_question_message(session: DebugSession) -> Message | None:
+    """Most recent assistant message that actually asked a question.
+
+    Deterministic push-forward replies ("walk me through it") and other
+    questionless turns must not erase the standing question: the model has
+    to keep evaluating answers against the last real question it asked.
+    """
+    for message in reversed(session.messages):
+        content = (message.content or "").strip()
+        if message.role == "assistant" and "?" in content:
             return message
     return None
 

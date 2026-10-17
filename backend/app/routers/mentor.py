@@ -58,6 +58,7 @@ from app.services.orchestration import (
     extract_code_block,
     is_repeat,
     previous_assistant_message,
+    previous_question_message,
     retrieve_for_turn,
     turn_context_block,
 )
@@ -168,6 +169,11 @@ def _prepare_turn(
     intent = classify_intent(content)
     prev = previous_assistant_message(session)
     prev_q = prev.content if prev else None
+    standing = previous_question_message(session)
+    if standing is not None:
+        # Questionless deterministic pushes must not blank the standing
+        # question the model evaluates the student's message against.
+        prev_q = standing.content
     new_code: str | None = None
     if explicit_code and explicit_code.strip() and explicit_code.strip() != session.code:
         new_code = explicit_code.strip()[:8000]
