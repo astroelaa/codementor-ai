@@ -1,11 +1,10 @@
 """Health check and sample snippets. No authentication required."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session as DbSession
 
-from app import deps
 from app.schemas import HealthResponse, LanguageInfoResponse, SnippetResponse
 from app.services.email import is_delivery_configured
 from app.services.languages import LANGUAGES

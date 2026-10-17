@@ -1,6 +1,6 @@
 """Session tests: creation, guest limits, ownership, replay."""
 
-from tests.conftest import PYTHON_CODE, auth_headers, client, make_user, user_headers
+from tests.conftest import PYTHON_CODE, auth_headers, client, make_user
 
 
 def test_create_session_authenticated(user_headers):

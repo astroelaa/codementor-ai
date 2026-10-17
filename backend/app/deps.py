@@ -1,7 +1,6 @@
 """Request dependencies: database session, LLM manager, auth."""
 
 import uuid
-from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session as DbSession

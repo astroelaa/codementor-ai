@@ -9,7 +9,7 @@ Three layers, all derived from stored rows the user can already see:
 
 from sqlalchemy.orm import Session as DbSession
 
-from app.models import Misconception, Project, Session as DebugSession
+from app.models import Project, Session as DebugSession
 
 
 def build_session_recap(session: DebugSession, message_count: int) -> str:

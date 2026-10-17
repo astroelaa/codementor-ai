@@ -1,6 +1,6 @@
 """Doc simplifier tests: validation, persistence, isolation."""
 
-from tests.conftest import auth_headers, client, fake_llm, make_user, user_headers  # noqa: F401
+from tests.conftest import auth_headers, client, make_user
 from tests.fake_llm import DOC_JSON
 
 TEXT = "A list comprehension builds a new list by applying an expression to each item."

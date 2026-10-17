@@ -46,7 +46,7 @@ def test_verify_rejects_bad_expired_tokens():
 
 
 def test_resend_rate_limited_per_hour():
-    mem = _memory()
+    _memory()
     try:
         user, password = make_user(client)
         headers = auth_headers(client, user["email"], password)

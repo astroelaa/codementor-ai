@@ -1,6 +1,6 @@
 """Project briefs, milestones, tasks: persistence, ownership, progression."""
 
-from tests.conftest import auth_headers, client, fake_llm, make_user, user_headers  # noqa: F401
+from tests.conftest import auth_headers, client, make_user
 from tests.fake_llm import BRIEF_JSON
 
 

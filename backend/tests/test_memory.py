@@ -1,7 +1,7 @@
 """Memory: recap builder, project injection, inspect/delete endpoints."""
 
 from app.services.memory import build_project_context, build_session_recap
-from tests.conftest import PYTHON_CODE, auth_headers, client, fake_llm, make_user, user_headers  # noqa: F401
+from tests.conftest import PYTHON_CODE, auth_headers, client, make_user
 
 
 def _session_with_misc(headers):

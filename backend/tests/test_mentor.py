@@ -2,7 +2,7 @@
 
 import json
 
-from tests.conftest import PYTHON_CODE, client, fake_llm, user_headers  # noqa: F401
+from tests.conftest import PYTHON_CODE, client
 from tests.fake_llm import HINT_JSON, JUDGE_FAIL_JSON, JUDGE_PASS_JSON
 
 

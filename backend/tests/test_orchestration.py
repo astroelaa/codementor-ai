@@ -9,8 +9,8 @@ from app.services.orchestration import (
     is_repeat,
     turn_context_block,
 )
-from tests.conftest import PYTHON_CODE, client, fake_llm, user_headers  # noqa: F401
-from tests.fake_llm import HINT_JSON, MENTOR_JSON
+from tests.conftest import PYTHON_CODE, client
+from tests.fake_llm import MENTOR_JSON
 
 
 def _new_session(headers, **kwargs):
@@ -377,7 +377,6 @@ def test_retrieval_returns_only_matching_language_cards():
 
 
 def test_stream_prompt_carries_anti_repeat_context():
-    from app.services.knowledge import retrieve
     from app.services.orchestration import retrieve_for_turn, turn_context_block
     from app.mentor_prompts import stream_system_prompt
 

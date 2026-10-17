@@ -1,7 +1,7 @@
 """Notifications: persistence, ownership, retention, preferences."""
 
 from app.services.email import MemoryEmailBackend, get_email_backend
-from tests.conftest import PYTHON_CODE, auth_headers, client, fake_llm, make_user  # noqa: F401
+from tests.conftest import PYTHON_CODE, auth_headers, client, make_user
 from tests.fake_llm import JUDGE_PASS_JSON
 
 

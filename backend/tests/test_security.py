@@ -6,7 +6,7 @@ from app.config import Settings
 from app.main import create_app
 from fastapi.testclient import TestClient
 
-from tests.conftest import TEST_DB_URL, client, make_user
+from tests.conftest import TEST_DB_URL, client
 
 SENTINEL = "gsk-test-sentinel-key-12345"
 

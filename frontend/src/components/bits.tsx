@@ -1,22 +1,3 @@
-export function TypingDots({ label = "Mentor is thinking" }: { label?: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 py-1" role="status" aria-label={label}>
-      <span className="typing-dot" />
-      <span className="typing-dot" />
-      <span className="typing-dot" />
-    </span>
-  );
-}
-
-export function ChatSkeleton() {
-  return (
-    <div className="flex flex-col gap-2" aria-hidden="true">
-      <div className="skeleton h-4 w-11/12" />
-      <div className="skeleton h-4 w-3/4" />
-    </div>
-  );
-}
-
 export function EmptyState({
   title,
   body,

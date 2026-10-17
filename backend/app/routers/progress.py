@@ -7,13 +7,12 @@ explicit source so they cannot be mistaken for measured progress.
 
 from collections import Counter
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session as DbSession
 
 from app import deps
 from app.models import (
-    Badge,
     LearningPath,
     Misconception,
     PathItem,

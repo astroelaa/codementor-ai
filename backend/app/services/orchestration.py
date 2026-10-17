@@ -14,7 +14,7 @@ import re
 from difflib import SequenceMatcher
 
 from app.models import Message, Session as DebugSession
-from app.services.knowledge import Card, citations, format_references, retrieve
+from app.services.knowledge import Card, retrieve
 
 GREETING_RES = [
     re.compile(p, re.IGNORECASE)

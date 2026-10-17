@@ -1,6 +1,6 @@
 """Progress tests: dashboard data, skills, learning paths. All real rows."""
 
-from tests.conftest import PYTHON_CODE, client, fake_llm  # noqa: F401
+from tests.conftest import PYTHON_CODE, client
 from tests.fake_llm import JUDGE_PASS_JSON
 
 
