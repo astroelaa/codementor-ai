@@ -17,7 +17,6 @@ config = context.config
 url = normalize_database_url(
     os.environ.get("DATABASE_URL") or get_settings().database_url
 )
-config.set_main_option("sqlalchemy.url", url)
 
 target_metadata = Base.metadata
 

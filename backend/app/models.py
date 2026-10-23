@@ -1,7 +1,7 @@
 """SQLAlchemy 2 models for CodeMentor AI.
 
-IDs are portable string UUIDs so the same schema runs on SQLite (local dev)
-and PostgreSQL (production) without dialect-specific types.
+IDs are UUIDs represented as strings in Python so existing string-based
+service code keeps working across SQLite and PostgreSQL.
 """
 
 from __future__ import annotations
@@ -14,17 +14,30 @@ from typing import Optional
 from sqlalchemy import (
     JSON,
     Boolean,
+    Column,
     Date,
     DateTime,
     ForeignKey,
     Integer,
+    MetaData,
     String,
+    Table,
     Text,
     UniqueConstraint,
+    Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+auth_metadata = MetaData()
+auth_users = Table(
+    "users",
+    auth_metadata,
+    Column("id", Uuid(as_uuid=False), primary_key=True),
+    schema="auth",
+)
 
 
 def _uuid() -> str:
@@ -38,14 +51,17 @@ def _now() -> datetime:
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        primary_key=True,
+    )
+    email: Mapped[Optional[str]] = mapped_column(
+        String(255), unique=True, index=True, nullable=True
+    )
     display_name: Mapped[str] = mapped_column(String(120), default="")
     theme: Mapped[str] = mapped_column(String(20), default="dark")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    token_version: Mapped[int] = mapped_column(Integer, default=0)
     notify_security_emails: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_progress_emails: Mapped[bool] = mapped_column(Boolean, default=False)
     # Profile-level learning preferences. Empty string = "not chosen yet";
@@ -58,34 +74,58 @@ class User(Base):
     )
 
     sessions: Mapped[list["Session"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == Session.user_id",
+        foreign_keys="Session.user_id",
     )
     misconceptions: Mapped[list["Misconception"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == Misconception.user_id",
+        foreign_keys="Misconception.user_id",
     )
     skill_progress: Mapped[list["SkillProgress"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == SkillProgress.user_id",
+        foreign_keys="SkillProgress.user_id",
     )
     learning_paths: Mapped[list["LearningPath"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == LearningPath.user_id",
+        foreign_keys="LearningPath.user_id",
     )
     badges: Mapped[list["UserBadge"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == UserBadge.user_id",
+        foreign_keys="UserBadge.user_id",
     )
     activities: Mapped[list["DailyActivity"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == DailyActivity.user_id",
+        foreign_keys="DailyActivity.user_id",
     )
     doc_simplifications: Mapped[list["DocSimplification"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == DocSimplification.user_id",
+        foreign_keys="DocSimplification.user_id",
     )
     projects: Mapped[list["Project"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
-    )
-    auth_tokens: Mapped[list["AuthToken"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == Project.user_id",
+        foreign_keys="Project.user_id",
     )
     notifications: Mapped[list["Notification"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        primaryjoin="User.id == Notification.user_id",
+        foreign_keys="Notification.user_id",
     )
 
 
@@ -94,18 +134,22 @@ class Session(Base):
 
     __tablename__ = "sessions"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    user_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True, index=True
-    )
-    guest_token: Mapped[Optional[str]] = mapped_column(
-        String(36), nullable=True, index=True
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
     language: Mapped[str] = mapped_column(String(32), default="python")
     goal: Mapped[str] = mapped_column(String(20), default="debug")
     mode: Mapped[str] = mapped_column(String(20), default="practice")
     project_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("projects.id"), nullable=True, index=True
+        Uuid(as_uuid=False),
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     code: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active|solved
@@ -121,7 +165,11 @@ class Session(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    user: Mapped[Optional[User]] = relationship(back_populates="sessions")
+    user: Mapped[User] = relationship(
+        back_populates="sessions",
+        primaryjoin="User.id == Session.user_id",
+        foreign_keys="Session.user_id",
+    )
     messages: Mapped[list["Message"]] = relationship(
         back_populates="session",
         cascade="all, delete-orphan",
@@ -138,9 +186,11 @@ class Session(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("sessions.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        index=True,
     )
     role: Mapped[str] = mapped_column(String(16))  # user | assistant
     content: Mapped[str] = mapped_column(Text)
@@ -155,9 +205,11 @@ class Message(Base):
 class Hint(Base):
     __tablename__ = "hints"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("sessions.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        index=True,
     )
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
@@ -172,12 +224,19 @@ class Misconception(Base):
 
     __tablename__ = "misconceptions"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     session_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("sessions.id"), nullable=True, index=True
+        Uuid(as_uuid=False),
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
-    user_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True, index=True
+    user_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
     type: Mapped[str] = mapped_column(String(64), index=True)
     description: Mapped[str] = mapped_column(Text)
@@ -186,13 +245,17 @@ class Misconception(Base):
     )
 
     session: Mapped[Optional[Session]] = relationship(back_populates="misconceptions")
-    user: Mapped[Optional[User]] = relationship(back_populates="misconceptions")
+    user: Mapped[User] = relationship(
+        back_populates="misconceptions",
+        primaryjoin="User.id == Misconception.user_id",
+        foreign_keys="Misconception.user_id",
+    )
 
 
 class Skill(Base):
     __tablename__ = "skills"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
@@ -202,27 +265,41 @@ class SkillProgress(Base):
     __tablename__ = "skill_progress"
     __table_args__ = (UniqueConstraint("user_id", "skill_id", name="uq_progress_user_skill"),)
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
-    skill_id: Mapped[str] = mapped_column(String(36), ForeignKey("skills.id"))
+    skill_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("skills.id", ondelete="CASCADE")
+    )
     encounters: Mapped[int] = mapped_column(Integer, default=0)
     score: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, onupdate=_now
     )
 
-    user: Mapped[User] = relationship(back_populates="skill_progress")
+    user: Mapped[User] = relationship(
+        back_populates="skill_progress",
+        primaryjoin="User.id == SkillProgress.user_id",
+        foreign_keys="SkillProgress.user_id",
+    )
     skill: Mapped[Skill] = relationship()
 
 
 class LearningPath(Base):
     __tablename__ = "learning_paths"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
     title: Mapped[str] = mapped_column(String(200))
     source: Mapped[str] = mapped_column(String(32), default="weak-spots")
@@ -231,7 +308,11 @@ class LearningPath(Base):
         DateTime(timezone=True), default=_now
     )
 
-    user: Mapped[User] = relationship(back_populates="learning_paths")
+    user: Mapped[User] = relationship(
+        back_populates="learning_paths",
+        primaryjoin="User.id == LearningPath.user_id",
+        foreign_keys="LearningPath.user_id",
+    )
     items: Mapped[list["PathItem"]] = relationship(
         back_populates="path",
         cascade="all, delete-orphan",
@@ -242,9 +323,11 @@ class LearningPath(Base):
 class PathItem(Base):
     __tablename__ = "path_items"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     path_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("learning_paths.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey("learning_paths.id", ondelete="CASCADE"),
+        index=True,
     )
     title: Mapped[str] = mapped_column(String(200))
     detail: Mapped[str] = mapped_column(Text, default="")
@@ -259,9 +342,13 @@ class Project(Base):
 
     __tablename__ = "projects"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
     title: Mapped[str] = mapped_column(String(200))
     objective: Mapped[str] = mapped_column(Text, default="")
@@ -276,7 +363,11 @@ class Project(Base):
         DateTime(timezone=True), default=_now, onupdate=_now
     )
 
-    user: Mapped[User] = relationship(back_populates="projects")
+    user: Mapped[User] = relationship(
+        back_populates="projects",
+        primaryjoin="User.id == Project.user_id",
+        foreign_keys="Project.user_id",
+    )
     milestones: Mapped[list["Milestone"]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
@@ -287,9 +378,11 @@ class Project(Base):
 class Milestone(Base):
     __tablename__ = "milestones"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     project_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("projects.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        index=True,
     )
     title: Mapped[str] = mapped_column(String(200))
     detail: Mapped[str] = mapped_column(Text, default="")
@@ -307,9 +400,11 @@ class Milestone(Base):
 class ProjectTask(Base):
     __tablename__ = "project_tasks"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     milestone_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("milestones.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey("milestones.id", ondelete="CASCADE"),
+        index=True,
     )
     title: Mapped[str] = mapped_column(String(200))
     detail: Mapped[str] = mapped_column(Text, default="")
@@ -322,53 +417,37 @@ class ProjectTask(Base):
 class Badge(Base):
     __tablename__ = "badges"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text, default="")
     icon: Mapped[str] = mapped_column(String(64), default="award")
 
 
-class AuthToken(Base):
-    """Single-use auth tokens: email verification and password resets.
-
-    Only the SHA-256 hash is stored — the raw token is shown once (in the
-    email link) and never persisted, logged, or returned by any endpoint.
-    """
-
-    __tablename__ = "auth_tokens"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
-    )
-    purpose: Mapped[str] = mapped_column(String(32), index=True)
-    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    used_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_now
-    )
-
-    user: Mapped[User] = relationship(back_populates="auth_tokens")
-
-
 class UserBadge(Base):
     __tablename__ = "user_badges"
     __table_args__ = (UniqueConstraint("user_id", "badge_id", name="uq_user_badge"),)
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
-    badge_id: Mapped[str] = mapped_column(String(36), ForeignKey("badges.id"))
+    badge_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False), ForeignKey("badges.id", ondelete="CASCADE")
+    )
     awarded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now
     )
 
-    user: Mapped[User] = relationship(back_populates="badges")
+    user: Mapped[User] = relationship(
+        back_populates="badges",
+        primaryjoin="User.id == UserBadge.user_id",
+        foreign_keys="UserBadge.user_id",
+    )
     badge: Mapped[Badge] = relationship()
 
 
@@ -376,23 +455,35 @@ class DailyActivity(Base):
     __tablename__ = "daily_activity"
     __table_args__ = (UniqueConstraint("user_id", "day", name="uq_activity_user_day"),)
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
     day: Mapped[date_type] = mapped_column(Date, index=True)
     sessions_count: Mapped[int] = mapped_column(Integer, default=0)
     messages_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    user: Mapped[User] = relationship(back_populates="activities")
+    user: Mapped[User] = relationship(
+        back_populates="activities",
+        primaryjoin="User.id == DailyActivity.user_id",
+        foreign_keys="DailyActivity.user_id",
+    )
 
 
 class DocSimplification(Base):
     __tablename__ = "doc_simplifications"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    user_id: Mapped[Optional[str]] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True, index=True
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
     language: Mapped[str] = mapped_column(String(32), default="")
     input_text: Mapped[str] = mapped_column(Text)
@@ -403,7 +494,11 @@ class DocSimplification(Base):
         DateTime(timezone=True), default=_now
     )
 
-    user: Mapped[Optional[User]] = relationship(back_populates="doc_simplifications")
+    user: Mapped[User] = relationship(
+        back_populates="doc_simplifications",
+        primaryjoin="User.id == DocSimplification.user_id",
+        foreign_keys="DocSimplification.user_id",
+    )
 
 
 class Notification(Base):
@@ -416,9 +511,13 @@ class Notification(Base):
 
     __tablename__ = "notifications"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), index=True
+        Uuid(as_uuid=False),
+        ForeignKey(auth_users.c.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        server_default=text("auth.uid()"),
     )
     type: Mapped[str] = mapped_column(String(64), index=True)
     title: Mapped[str] = mapped_column(String(200))
@@ -428,4 +527,12 @@ class Notification(Base):
         DateTime(timezone=True), default=_now
     )
 
-    user: Mapped[User] = relationship(back_populates="notifications")
+    user: Mapped[User] = relationship(
+        back_populates="notifications",
+        primaryjoin="User.id == Notification.user_id",
+        foreign_keys="Notification.user_id",
+    )
+
+
+class AuthToken:
+    pass
