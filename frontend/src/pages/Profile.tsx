@@ -1,11 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
-  BadgeCheck,
   KeyRound,
-  Mail,
   Save,
   ShieldCheck,
   Trash2,
@@ -37,11 +34,10 @@ function errText(e: unknown, fallback: string): string {
 }
 
 export function Profile() {
-  const { user, refresh, logout } = useAuth();
+  const { user, refresh, logout, changePassword } = useAuth();
   const { theme, set: setTheme } = useTheme();
   const toast = useToast();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   /* ----- identity ----- */
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
@@ -64,7 +60,6 @@ export function Profile() {
     }
   }
 
-  /* ----- password change (re-auth + fresh token; other sessions revoked) ----- */
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -80,12 +75,11 @@ export function Profile() {
     }
     setChangingPassword(true);
     try {
-      await api.changePassword(currentPassword, newPassword);
+      await changePassword(currentPassword, newPassword);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       toast("success", "Password changed. Other sessions were logged out.");
-      await refresh();
     } catch (err) {
       setPasswordError(errText(err, "Could not change the password."));
     } finally {
@@ -93,18 +87,15 @@ export function Profile() {
     }
   }
 
-  /* ----- account deletion (password re-auth + typed confirmation) ----- */
   const [showDanger, setShowDanger] = useState(false);
   const [confirmWord, setConfirmWord] = useState("");
-  const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
 
   async function onDelete() {
     setDeleting(true);
     try {
-      await api.deleteAccount(deletePassword);
-      logout();
-      queryClient.clear();
+      await api.deleteAccount();
+      await logout();
       navigate("/");
       toast("success", "Account deleted. All data has been removed.");
     } catch (err) {
@@ -141,43 +132,23 @@ export function Profile() {
           <div className="mt-4 flex flex-col gap-4">
             <div>
               <span className="label">Email</span>
-              <div className="flex items-center gap-2">
-                <input
-                  className="input flex-1 disabled:opacity-70"
-                  type="email"
-                  value={user.email}
-                  disabled
-                  readOnly
-                  aria-readonly="true"
-                />
-                {user.is_verified ? (
-                  <span className="flex shrink-0 items-center gap-1 rounded-full border border-(--accent)/40 bg-(--accent)/10 px-2.5 py-1 text-xs font-bold text-(--accent-text)">
-                    <BadgeCheck size={14} strokeWidth={1.5} aria-hidden /> Verified
-                  </span>
-                ) : (
-                  <span className="shrink-0 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-2.5 py-1 text-xs font-bold text-yellow-600 dark:text-yellow-400">
-                    Not verified
-                  </span>
-                )}
-              </div>
-              <div className="mt-2 flex items-center gap-3">
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  disabled={user.is_verified}
-                  onClick={async () => {
-                    try {
-                      const r = await api.resendVerification();
-                      toast("success", r.message);
-                    } catch (e) {
-                      toast("error", errText(e, "Could not send the email."));
-                    }
-                  }}
-                >
-                  <Mail size={14} strokeWidth={1.5} aria-hidden />
-                  Resend verification email
-                </button>
-              </div>
+              <input
+                className="input disabled:opacity-70"
+                type="text"
+                value={user.email ?? "Guest session"}
+                disabled
+                readOnly
+                aria-readonly="true"
+              />
+              {user.is_anonymous && (
+                <p className="mt-2 text-xs text-(--muted)">
+                  This is a guest session.{" "}
+                  <Link to="/signup" className="font-semibold text-(--accent-text)">
+                    Create a free account
+                  </Link>{" "}
+                  for unlimited sessions and a permanent history.
+                </p>
+              )}
             </div>
 
             <form
@@ -294,52 +265,54 @@ export function Profile() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3">
-            <label className="flex items-center justify-between gap-3 rounded-lg border border-(--border) px-3 py-2.5">
-              <span className="flex items-center gap-2 text-sm font-semibold">
-                <ShieldCheck size={15} strokeWidth={1.5} aria-hidden />
-                Email me about account security
-              </span>
-              <input
-                type="checkbox"
-                className="size-4 accent-(--accent)"
-                checked={user.notify_security_emails}
-                onChange={(e) =>
-                  void patchProfile(
-                    { notify_security_emails: e.target.checked },
-                    "Security email preference saved.",
-                  )
-                }
-              />
-            </label>
-            <label className="flex items-center justify-between gap-3 rounded-lg border border-(--border) px-3 py-2.5">
-              <span className="text-sm font-semibold">
-                Email me about learning progress
-              </span>
-              <input
-                type="checkbox"
-                className="size-4 accent-(--accent)"
-                checked={user.notify_progress_emails}
-                onChange={(e) =>
-                  void patchProfile(
-                    { notify_progress_emails: e.target.checked },
-                    "Progress email preference saved.",
-                  )
-                }
-              />
-            </label>
-          </div>
+          {!user.is_anonymous && (
+            <div className="mt-4 flex flex-col gap-3">
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-(--border) px-3 py-2.5">
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <ShieldCheck size={15} strokeWidth={1.5} aria-hidden />
+                  Email me about account security
+                </span>
+                <input
+                  type="checkbox"
+                  className="size-4 accent-(--accent)"
+                  checked={user.notify_security_emails}
+                  onChange={(e) =>
+                    void patchProfile(
+                      { notify_security_emails: e.target.checked },
+                      "Security email preference saved.",
+                    )
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-(--border) px-3 py-2.5">
+                <span className="text-sm font-semibold">
+                  Email me about learning progress
+                </span>
+                <input
+                  type="checkbox"
+                  className="size-4 accent-(--accent)"
+                  checked={user.notify_progress_emails}
+                  onChange={(e) =>
+                    void patchProfile(
+                      { notify_progress_emails: e.target.checked },
+                      "Progress email preference saved.",
+                    )
+                  }
+                />
+              </label>
+            </div>
+          )}
         </section>
 
-        {/* ---------------- password ---------------- */}
-        <section className="card mt-6 p-6 md:p-7" aria-labelledby="profile-password">
-          <h2 id="profile-password" className="flex items-center gap-2 text-lg font-bold">
-            <KeyRound size={17} strokeWidth={1.5} aria-hidden /> Change password
-          </h2>
-          <p className="mt-1 text-sm text-(--muted)">
-            Requires your current password. All other sessions are logged out.
-          </p>
-          <form onSubmit={onChangePassword} className="mt-4 flex max-w-md flex-col gap-3">
+        {!user.is_anonymous && (
+          <section className="card mt-6 p-6 md:p-7" aria-labelledby="profile-password">
+            <h2 id="profile-password" className="flex items-center gap-2 text-lg font-bold">
+              <KeyRound size={17} strokeWidth={1.5} aria-hidden /> Change password
+            </h2>
+            <p className="mt-1 text-sm text-(--muted)">
+              Requires your current password. All other sessions are logged out.
+            </p>
+            <form onSubmit={onChangePassword} className="mt-4 flex max-w-md flex-col gap-3">
             <div>
               <label className="label" htmlFor="cp-current">Current password</label>
               <input
@@ -388,6 +361,7 @@ export function Profile() {
             </button>
           </form>
         </section>
+        )}
 
         {/* ---------------- danger zone ---------------- */}
         <section className="card mt-6 border-(--danger)/40 p-6 md:p-7" aria-labelledby="profile-danger">
@@ -424,18 +398,6 @@ export function Profile() {
                   placeholder="DELETE"
                 />
               </div>
-              <div>
-                <label className="label" htmlFor="del-pass">Your password</label>
-                <input
-                  id="del-pass"
-                  className="input"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  value={deletePassword}
-                  onChange={(e) => setDeletePassword(e.target.value)}
-                />
-              </div>
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -450,7 +412,6 @@ export function Profile() {
                   onClick={() => {
                     setShowDanger(false);
                     setConfirmWord("");
-                    setDeletePassword("");
                   }}
                 >
                   Cancel

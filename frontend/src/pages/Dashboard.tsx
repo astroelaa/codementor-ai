@@ -16,7 +16,6 @@ import { useAuth } from "../lib/auth";
 import { useToast } from "../lib/toast";
 import { Reveal } from "../components/Reveal";
 import { EmptyState } from "../components/bits";
-import { VerifyBanner } from "../components/VerifyBanner";
 
 const BADGE_ICONS: Record<string, typeof Award> = {
   flag: Award,
@@ -33,7 +32,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showDelete, setShowDelete] = useState(false);
-  const [password, setPassword] = useState("");
+  const [confirmWord, setConfirmWord] = useState("");
 
   const dash = useQuery({
     queryKey: ["dashboard"],
@@ -63,9 +62,9 @@ export function Dashboard() {
       toast("error", e instanceof ApiError ? e.message : "Could not regenerate."),
   });
   const removeAccount = useMutation({
-    mutationFn: (pw: string) => api.deleteAccount(pw),
-    onSuccess: () => {
-      logout();
+    mutationFn: () => api.deleteAccount(),
+    onSuccess: async () => {
+      await logout();
       navigate("/");
       toast("success", "Account and all data deleted.");
     },
@@ -154,7 +153,6 @@ export function Dashboard() {
         <p className="eyebrow">Dashboard</p>
         <h1 className="h2-serif mt-2 text-3xl md:text-4xl">Your progress</h1>
       </Reveal>
-      <VerifyBanner />
 
       {isNew ? (
         <Reveal delay={0.05}>
@@ -371,38 +369,50 @@ export function Dashboard() {
           <Reveal delay={0.12}>
             <div className="card mt-5 p-6">
               <h2 className="font-bold">Account</h2>
-              <p className="mt-1 text-sm text-(--muted)">
-                Signed in as <span className="font-semibold text-(--text)">{user.email}</span>
-                {user.display_name ? ` (${user.display_name})` : ""}.
-                {user.is_verified ? " Email verified." : " Email not verified yet."}
-              </p>
-              <div className="mt-4 flex flex-col gap-2.5 border-t border-(--border) pt-4">
-                <p className="label">Email preferences</p>
-                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1 size-4 accent-[#7C5CFF]"
-                    checked={user.notify_security_emails}
-                    onChange={(e) => prefs.mutate({ notify_security_emails: e.target.checked })}
-                  />
-                  <span>
-                    <span className="font-semibold">Security emails</span>
-                    <span className="block text-[13px] text-(--muted)">Password changes and important account notices. Recommended on.</span>
-                  </span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1 size-4 accent-[#7C5CFF]"
-                    checked={user.notify_progress_emails}
-                    onChange={(e) => prefs.mutate({ notify_progress_emails: e.target.checked })}
-                  />
-                  <span>
-                    <span className="font-semibold">Progress emails</span>
-                    <span className="block text-[13px] text-(--muted)">A note when you solve a session. Off by default — no spam, ever.</span>
-                  </span>
-                </label>
-              </div>
+              {user.is_anonymous ? (
+                <p className="mt-1 text-sm text-(--muted)">
+                  You are using a guest session.{" "}
+                  <Link to="/signup" className="font-semibold text-(--accent-text)">
+                    Create a free account
+                  </Link>{" "}
+                  for unlimited sessions and a permanent history.
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-(--muted)">
+                  Signed in as{" "}
+                  <span className="font-semibold text-(--text)">{user.email}</span>
+                  {user.display_name ? ` (${user.display_name})` : ""}.
+                </p>
+              )}
+              {!user.is_anonymous && (
+                <div className="mt-4 flex flex-col gap-2.5 border-t border-(--border) pt-4">
+                  <p className="label">Email preferences</p>
+                  <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1 size-4 accent-[#7C5CFF]"
+                      checked={user.notify_security_emails}
+                      onChange={(e) => prefs.mutate({ notify_security_emails: e.target.checked })}
+                    />
+                    <span>
+                      <span className="font-semibold">Security emails</span>
+                      <span className="block text-[13px] text-(--muted)">Password changes and important account notices. Recommended on.</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1 size-4 accent-[#7C5CFF]"
+                      checked={user.notify_progress_emails}
+                      onChange={(e) => prefs.mutate({ notify_progress_emails: e.target.checked })}
+                    />
+                    <span>
+                      <span className="font-semibold">Progress emails</span>
+                      <span className="block text-[13px] text-(--muted)">A note when you solve a session. Off by default — no spam, ever.</span>
+                    </span>
+                  </label>
+                </div>
+              )}
               {!showDelete ? (
                 <button
                   type="button"
@@ -416,28 +426,30 @@ export function Dashboard() {
                   className="mt-4 flex max-w-sm flex-col gap-2"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (password) removeAccount.mutate(password);
+                    if (confirmWord === "DELETE") removeAccount.mutate();
                   }}
                 >
                   <p className="text-sm text-(--muted)">
                     This permanently deletes your account, sessions, messages,
                     and progress. This cannot be undone.
                   </p>
-                  <label className="label" htmlFor="delete-password">Confirm with your password</label>
+                  <label className="label" htmlFor="delete-confirm">
+                    Type <strong>DELETE</strong> to confirm
+                  </label>
                   <input
-                    id="delete-password"
-                    type="password"
+                    id="delete-confirm"
                     className="input"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
+                    value={confirmWord}
+                    onChange={(e) => setConfirmWord(e.target.value)}
+                    autoComplete="off"
+                    placeholder="DELETE"
                   />
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         setShowDelete(false);
-                        setPassword("");
+                        setConfirmWord("");
                       }}
                       className="btn btn-ghost btn-sm"
                     >
@@ -445,7 +457,7 @@ export function Dashboard() {
                     </button>
                     <button
                       type="submit"
-                      disabled={removeAccount.isPending || !password}
+                      disabled={removeAccount.isPending || confirmWord !== "DELETE"}
                       className="btn btn-sm border-(--danger) bg-(--danger) text-white"
                     >
                       {removeAccount.isPending ? "Deleting…" : "Yes, delete everything"}

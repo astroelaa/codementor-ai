@@ -221,7 +221,7 @@ export function Navbar() {
                 >
                   <UserIcon size={15} strokeWidth={1.5} aria-hidden />
                   <span className="hidden max-w-24 truncate sm:inline">
-                    {user.display_name || user.email}
+                    {user.display_name || user.email || "Guest"}
                   </span>
                   <ChevronDown
                     size={13}
@@ -259,12 +259,12 @@ export function Navbar() {
                         type="button"
                         onClick={() => {
                           setAccountOpen(false);
-                          logout();
+                          void logout();
                           navigate("/");
                         }}
                         className="block w-full rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold text-(--muted) transition-colors hover:bg-(--surface-2)"
                       >
-                        Log out
+                        {user.is_anonymous ? "End guest session" : "Log out"}
                       </button>
                     </motion.div>
                   )}
@@ -336,12 +336,12 @@ export function Navbar() {
                       type="button"
                       onClick={() => {
                         setOpen(false);
-                        logout();
+                        void logout();
                         navigate("/");
                       }}
                       className="block w-full py-2.5 text-left text-[15px] text-(--muted)"
                     >
-                      Log out
+                      {user.is_anonymous ? "End guest session" : "Log out"}
                     </button>
                   </>
                 )}

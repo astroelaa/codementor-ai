@@ -1,5 +1,7 @@
 /* Typed client for the CodeMentor AI backend. */
 
+import { supabase } from "./supabase";
+
 /* Canonical variable is VITE_API_BASE_URL (see frontend/.env.example and
    .github/workflows/pages.yml); VITE_API_URL is a legacy fallback.
    Local dev (vite) falls back to the local backend. Production builds NEVER
@@ -35,26 +37,6 @@ function defaultTimeout(): AbortSignal | undefined {
     : undefined;
 }
 
-const TOKEN_KEY = "cm_token";
-const GUEST_KEY = "cm_guest";
-
-export const tokenStore = {
-  get token() {
-    return localStorage.getItem(TOKEN_KEY);
-  },
-  set token(v: string | null) {
-    if (v) localStorage.setItem(TOKEN_KEY, v);
-    else localStorage.removeItem(TOKEN_KEY);
-  },
-  get guest() {
-    return localStorage.getItem(GUEST_KEY);
-  },
-  set guest(v: string | null) {
-    if (v) localStorage.setItem(GUEST_KEY, v);
-    else localStorage.removeItem(GUEST_KEY);
-  },
-};
-
 export interface Badge {
   slug: string;
   name: string;
@@ -85,7 +67,6 @@ export interface SessionDetail {
   created_at: string;
   updated_at: string;
   solved_at: string | null;
-  guest_token: string | null;
   badges_earned: Badge[];
   messages: ChatMessage[];
 }
@@ -254,10 +235,10 @@ export interface Snippet {
 }
 export interface User {
   id: string;
-  email: string;
+  email: string | null;
   display_name: string;
   theme: string;
-  is_verified: boolean;
+  is_anonymous: boolean;
   notify_security_emails: boolean;
   notify_progress_emails: boolean;
   preferred_language: string;
@@ -274,10 +255,14 @@ export class ApiError extends Error {
   }
 }
 
-function headers(extra: Record<string, string> = {}): Record<string, string> {
+async function headers(
+  extra: Record<string, string> = {},
+): Promise<Record<string, string>> {
   const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
-  if (tokenStore.token) h["Authorization"] = `Bearer ${tokenStore.token}`;
-  else if (tokenStore.guest) h["X-Guest-Token"] = tokenStore.guest;
+  if (!h.Authorization && supabase) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) h.Authorization = `Bearer ${data.session.access_token}`;
+  }
   return h;
 }
 
@@ -287,7 +272,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: headers(init.headers as Record<string, string> | undefined),
+      headers: await headers(init.headers as Record<string, string> | undefined),
       // Nothing should hang forever: a dropped connection would otherwise
       // leave the UI waiting for minutes with no message.
       signal: init.signal ?? defaultTimeout(),
@@ -317,22 +302,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 /* ---------- auth ---------- */
 export const api = {
-  signup(email: string, password: string, display_name: string): Promise<User> {
-    return request<User>("/api/auth/signup", {
-      method: "POST",
-      body: JSON.stringify({ email, password, display_name }),
+  me(accessToken?: string): Promise<User> {
+    return request<User>("/api/auth/me", {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     });
-  },
-  async login(email: string, password: string): Promise<string> {
-    const data = await request<{ access_token: string }>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-    tokenStore.token = data.access_token;
-    return data.access_token;
-  },
-  me(): Promise<User> {
-    return request<User>("/api/auth/me");
   },
   updateProfile(patch: {
     display_name?: string;
@@ -346,43 +319,8 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
-  changePassword(current_password: string, new_password: string): Promise<string> {
-    return request<{ access_token: string }>("/api/auth/change-password", {
-      method: "POST",
-      body: JSON.stringify({ current_password, new_password }),
-    }).then((d) => {
-      tokenStore.token = d.access_token;
-      return d.access_token;
-    });
-  },
-  deleteAccount(password: string): Promise<void> {
-    return request<void>("/api/auth/me", {
-      method: "DELETE",
-      body: JSON.stringify({ password }),
-    });
-  },
-  resendVerification(): Promise<{ message: string }> {
-    return request<{ message: string }>("/api/auth/resend-verification", {
-      method: "POST",
-    });
-  },
-  verifyEmail(token: string): Promise<{ message: string }> {
-    return request<{ message: string }>("/api/auth/verify-email", {
-      method: "POST",
-      body: JSON.stringify({ token }),
-    });
-  },
-  forgotPassword(email: string): Promise<{ message: string }> {
-    return request<{ message: string }>("/api/auth/forgot-password", {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    });
-  },
-  resetPassword(token: string, new_password: string): Promise<{ message: string }> {
-    return request<{ message: string }>("/api/auth/reset-password", {
-      method: "POST",
-      body: JSON.stringify({ token, new_password }),
-    });
+  deleteAccount(): Promise<void> {
+    return request<void>("/api/auth/me", { method: "DELETE" });
   },
 
   /* ---------- mentor ---------- */
@@ -574,7 +512,7 @@ export async function* streamMessage(
   try {
     res = await fetch(`${API_BASE}/api/sessions/${sessionId}/messages/stream`, {
       method: "POST",
-      headers: headers(),
+      headers: await headers(),
       body: JSON.stringify({
         content,
         ...(code !== undefined ? { code } : {}),

@@ -40,9 +40,6 @@ const History = lazy(() =>
 const Docs = lazy(() =>
   import("./pages/Docs").then((m) => ({ default: m.Docs })),
 );
-const Verify = lazy(() =>
-  import("./pages/Verify").then((m) => ({ default: m.Verify })),
-);
 const Forgot = lazy(() =>
   import("./pages/Password").then((m) => ({ default: m.Forgot })),
 );
@@ -149,7 +146,6 @@ function Shell() {
                   <Route path="/login" element={<Login />} />
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/profile" element={<Profile />} />
-                  <Route path="/verify" element={<Verify />} />
                   <Route path="/forgot" element={<Forgot />} />
                   <Route path="/reset" element={<Reset />} />
                   <Route path="/privacy" element={<LegalPrivacy />} />

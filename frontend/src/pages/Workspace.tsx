@@ -28,14 +28,12 @@ import { CodeEditor } from "../components/CodeEditor";
 import { EmptyState } from "../components/bits";
 import { ThinkingOrb } from "thinking-orbs";
 import { Reveal } from "../components/Reveal";
-import { VerifyBanner } from "../components/VerifyBanner";
 import { LANGUAGES, guessLanguage } from "../lib/detect";
 import {
   ApiError,
   api,
   API_MISCONFIGURED,
   streamMessage,
-  tokenStore,
   type Badge,
   type MentorTurn,
   type Misconception,
@@ -69,7 +67,7 @@ function badgeIcon(slug: string) {
 }
 
 export function Workspace() {
-  const { user } = useAuth();
+  const { user, ensureGuest } = useAuth();
   const toast = useToast();
 
   const [langSel, setLangSel] = useState<string>("auto");
@@ -217,7 +215,6 @@ export function Workspace() {
               ),
           })),
         );
-        if (s.guest_token) tokenStore.guest = s.guest_token;
       } catch {
         if (!cancelled) {
           toast("error", "Could not reopen that session. Start a new one.");
@@ -342,9 +339,9 @@ export function Workspace() {
     setStarting(true);
     setGuestCapped(false);
     try {
+      if (!user) await ensureGuest();
       const projectParam = searchParams.get("project");
       const s = await api.createSession(langSel, code, goal, projectParam, mode);
-      if (s.guest_token) tokenStore.guest = s.guest_token;
       setProjectId(s.project_id);
       // Sync the selector to the server-stored language (authoritative).
       setLangSel(s.language);
@@ -509,17 +506,15 @@ export function Workspace() {
         </div>
       </Reveal>
 
-      <VerifyBanner />
-
-      {!user && inSession && !guestCapped && (
+      {user?.is_anonymous && inSession && !guestCapped && (
         <Reveal delay={0.05}>
           <div className="card mt-5 flex flex-wrap items-center gap-3 px-5 py-3.5 text-sm">
             <FlaskConical size={16} strokeWidth={1.5} className="text-(--accent-text)" />
             <span className="text-(--muted)">
-              Guest session — your progress is not saved.
+              Guest session — one free session, not linked to an account.
             </span>
             <Link to="/signup" className="ml-auto font-semibold text-(--accent-text)">
-              Sign up free to keep it
+              Sign up free for unlimited sessions
             </Link>
           </div>
         </Reveal>
@@ -529,8 +524,9 @@ export function Workspace() {
         <div className="card mt-5 p-8 text-center">
           <h2 className="text-xl font-extrabold">Guest session used</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-(--muted)">
-            Guest mode includes one free session, and this device has used it.
-            Create a free account for unlimited sessions, history, and badges.
+            Guest mode includes one free session, and this guest session has
+            used it. Create a free account for unlimited sessions, history, and
+            badges.
           </p>
           <div className="mt-5 flex justify-center gap-3">
             <Link to="/signup" className="btn btn-primary">Sign up free</Link>

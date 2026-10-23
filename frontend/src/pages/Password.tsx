@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { CheckCircle2, KeyRound, Mail } from "lucide-react";
-import { ApiError, api } from "../lib/api";
+import { ApiError } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { Reveal } from "../components/Reveal";
 import { Logo } from "../components/Logo";
 
 export function Forgot() {
+  const { sendPasswordReset } = useAuth();
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState("");
@@ -15,8 +17,10 @@ export function Forgot() {
     if (!email.trim() || busy) return;
     setBusy(true);
     try {
-      const r = await api.forgotPassword(email.trim());
-      setSent(r.message);
+      await sendPasswordReset(email.trim());
+      setSent(
+        "If an account exists for that email, a reset link is on its way.",
+      );
     } catch (err) {
       setSent(err instanceof ApiError ? err.message : "Try again in a moment.");
     } finally {
@@ -66,12 +70,11 @@ export function Forgot() {
 }
 
 export function Reset() {
-  const [params] = useSearchParams();
+  const { user, loading, resetPassword, logout } = useAuth();
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [done, setDone] = useState("");
-  const token = params.get("token") ?? "";
+  const [done, setDone] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -79,8 +82,9 @@ export function Reset() {
     setBusy(true);
     setError("");
     try {
-      const r = await api.resetPassword(token, password);
-      setDone(r.message);
+      await resetPassword(password);
+      await logout();
+      setDone(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Reset failed. Try again.");
     } finally {
@@ -94,13 +98,18 @@ export function Reset() {
         <div className="card p-7 md:p-9">
           <Logo />
           <h1 className="mt-5 text-2xl font-extrabold tracking-tight">Choose a new password</h1>
-          {!token ? (
-            <p role="alert" className="mt-4 text-sm text-(--muted)">
-              This link is missing its token. Request a fresh reset link from the log-in page.
-            </p>
-          ) : done ? (
+          {done ? (
             <p role="status" className="mt-4 flex items-center gap-2 font-semibold text-(--success)">
-              <CheckCircle2 size={18} strokeWidth={1.5} /> {done}
+              <CheckCircle2 size={18} strokeWidth={1.5} /> Password updated. Log in with your new password.
+            </p>
+          ) : loading ? (
+            <p role="status" className="mt-4 text-sm text-(--muted)">
+              Checking your reset link…
+            </p>
+          ) : !user ? (
+            <p role="alert" className="mt-4 text-sm text-(--muted)">
+              This reset link is invalid or has expired. Request a fresh reset
+              link from the log-in page.
             </p>
           ) : (
             <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
