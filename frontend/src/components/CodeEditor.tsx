@@ -65,7 +65,9 @@ export function CodeEditor({
         extensions={extensions}
         theme={theme}
         onChange={onChange}
-        aria-label={label}
+        onCreateEditor={(view) => {
+          view.contentDOM.setAttribute("aria-label", label);
+        }}
         basicSetup={{ lineNumbers: true, highlightActiveLine: false, foldGutter: false }}
         style={{ fontSize: 13.5 }}
       />
