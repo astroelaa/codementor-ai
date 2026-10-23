@@ -103,6 +103,16 @@ def admin_get_user(user_id: str) -> dict | None:
     return response.json()
 
 
+def admin_delete_user(user_id: str) -> None:
+    with httpx.Client(timeout=30) as http:
+        response = http.delete(
+            f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+            headers=_admin_headers(),
+        )
+    if response.status_code != 404:
+        response.raise_for_status()
+
+
 def _sign_in(email: str, password: str) -> str:
     key = (email, password)
     cached = _token_cache.get(key)
@@ -193,11 +203,7 @@ def _cleanup_auth_users():
     yield
     for user_id in list(_created_auth_users):
         try:
-            with httpx.Client(timeout=30) as http:
-                http.delete(
-                    f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
-                    headers=_admin_headers(),
-                )
+            admin_delete_user(user_id)
         except Exception:
             pass
 
