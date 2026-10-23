@@ -1,43 +1,69 @@
 # CodeMentor AI — Deployment Checklist
 
-**Status: production deployment complete (verified 2026-10-16).**
-Everything below reflects the live system. Render and Hugging Face remain
-documented ALTERNATIVES only — they are not used and not configured in
-production.
+**Status: Supabase migration complete; production deployment follows the
+`main` branch.**
 
-## Done (verified, no action needed)
+## Done (verified in the repository)
 
-- ✅ **Neon Postgres**: production database live; `/ready` returns
-  `{"status":"ready","database":"ok"}`; schema current through
-  migration `3a1c9d47b802` (user learning preferences).
+- ✅ **Supabase Postgres**: schema, RLS policies, Auth-user trigger, and seed
+  data are applied with `alembic upgrade head`.
+- ✅ **Supabase Auth**: PKCE frontend, anonymous guests, password-reset email,
+  JWKS verification, and service-role account deletion.
 - ✅ **Backend deploy (Vercel)**: project `codementor-ai-api`,
   <https://codementor-ai-api.vercel.app>. Root Directory `backend`,
-  `backend/vercel.json` (300s timeout, `iad1`). Migration runs in the
-  build step (`backend/scripts/migrate.py`) and is no-op-safe per deploy.
+  `backend/vercel.json` (300s timeout, `iad1`). Migration runs in the build
+  step (`backend/scripts/migrate.py`) and is no-op-safe per deploy.
 - ✅ **Frontend deploy (Vercel)**: project `codementor-ai`,
   <https://codementor-ai.vercel.app>, connected to `astroelaa/codementor-ai`
   branch `main`, Root Directory `frontend`. GitHub Pages remains live as a
-  public mirror: <https://astroelaa.github.io/codementor-ai/> (repo variable
-  `VITE_API_BASE_URL`).
-- ✅ **Transactional email (SMTP/Gmail)**: `EMAIL_PROVIDER=smtp`,
-  `EMAIL_SMTP_HOST=smtp.gmail.com`, `EMAIL_SMTP_PORT=465`
-  (TLS-on-connect — 587 STARTTLS sessions are dropped by Vercel egress),
-  `EMAIL_SMTP_USER` / `EMAIL_SMTP_PASSWORD` / `EMAIL_SENDER` set as secrets.
-  Real delivery proven: verification email submitted by Gmail and received
-  in a real inbox (user-confirmed 2026-10-16).
-- ✅ **Backend secrets**: set with hidden values only (`DATABASE_URL`,
-  `JWT_SECRET`, `GROQ_API_KEY`, `EMAIL_SMTP_PASSWORD`). `/health` returns
-  provider names only; no key material ever shipped in the repo.
-- ✅ **CI**: backend pytest (144 tests) + frontend typecheck/build green on
-  every push to `main`.
+  public mirror: <https://astroelaa.github.io/codementor-ai/>.
+- ✅ **CI**: backend pytest (180 tests) + frontend typecheck/build green on
+  every push to `main`. The backend job uses the Supabase repository secrets.
+- ✅ **Solve-notification email (optional)**: `EMAIL_PROVIDER`,
+  `EMAIL_SMTP_*`, or `RESEND_API_KEY`. Supabase Auth sends signup and password
+  reset email; this optional mail is only for session-solved notifications.
+
+## Required platform configuration
+
+### Backend (Vercel)
+
+Set these names in Vercel → Settings → Environment Variables:
+
+`DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `ENVIRONMENT=production`, `ALLOWED_ORIGINS`,
+`GROQ_API_KEY`, and any optional fallback provider keys.
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. `DATABASE_URL` must be the Supabase
+session-pooler PostgreSQL URL with `sslmode=require`.
+
+### Frontend (Vercel)
+
+Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_API_BASE_URL`.
+
+### GitHub Pages
+
+Set repository variables `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, and
+`VITE_SUPABASE_ANON_KEY` (Settings → Secrets and variables → Actions →
+Variables). These are public browser values.
+
+### GitHub Actions CI
+
+Set repository secrets `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY` for the live identity/RLS tests.
+
+### Supabase Auth
+
+- Site URL = production frontend URL.
+- Redirect URLs include local Vite, Vercel, and GitHub Pages origins.
+- Anonymous sign-ins enabled.
+- Email provider configured for password reset.
 
 ## Standing user actions (outside the repo)
 
-- Rotate/delete the old Groq key on the Groq dashboard if a key was ever
-  exposed anywhere public (production already uses the rotated key).
-- Keep the platform dashboard current (e.g. attach the canonical frontend
-  domain as a project domain from the Vercel dashboard if it was added as a
-  one-off alias).
+- Rotate/delete any API key that was ever exposed publicly.
+- Keep the Supabase Auth URL configuration current if the frontend domain
+  changes.
+- Review Supabase backups / point-in-time recovery before high-risk migrations.
 
 ## Documented alternatives (NOT used in production; configs kept in repo)
 
@@ -46,13 +72,3 @@ production.
   --port $PORT`, `/health` check. Requires a credit card on Render.
 - **Hugging Face Spaces Docker** (`backend/Dockerfile`): same start command,
   `${PORT:-7860}`. Import as a new Space if Vercel is ever replaced.
-
-## Historical blockers — resolved
-
-| formerly blocked | resolution (2026-10-16) |
-|---|---|
-| Neon Postgres | provisioned; pooled `postgresql+psycopg2://` URL stored only as a Vercel secret |
-| Backend host | Vercel (Render card requirement documented as alternative) |
-| Transactional email | Gmail SMTP on port 465; real inbox delivery confirmed |
-| Frontend API URL | repo variable `VITE_API_BASE_URL` = canonical backend URL |
-| Groq key rotation | rotated key in production; old key in chat history — verify deletion on the Groq dashboard |

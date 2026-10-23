@@ -1,9 +1,13 @@
 # CodeMentor AI — Security & Production Audit
 
+> **Historical document (pre-Supabase migration).** JWT/bcrypt and email
+> verification details below describe the previous system. See the root
+> `README.md` for the current Supabase Auth + PostgreSQL + RLS architecture.
+
 Audited 2026-10-14 against the code at `main` (74 backend tests green,
 frontend build green). Updated 2026-10-17: production is live on Vercel
 (frontend `codementor-ai.vercel.app`, backend `codementor-ai-api.vercel.app`,
-Neon Postgres, Gmail SMTP verification; **144 backend tests green**).
+Supabase Postgres, Gmail SMTP verification; **144 backend tests green**).
 Severity: HIGH / MED / LOW / NOTE.
 
 ## 1. Authentication and accounts
@@ -81,6 +85,6 @@ Severity: HIGH / MED / LOW / NOTE.
 - In-memory rate limiter is single-process correct; fine on one Vercel
   instance per request burst, but multi-instance scaling would need a shared
   store.
-- Free-tier sleep/quotas on Vercel/Neon/Groq.
+- Free-tier sleep/quotas on Vercel/Supabase/Groq.
 - `codementor-ai.vercel.app` is a deployment alias rather than a project
   domain — cosmetic/ops issue only (documented in deployment-checklist).

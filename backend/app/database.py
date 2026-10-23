@@ -34,9 +34,8 @@ def build_engine(database_url: str):
             kwargs["poolclass"] = StaticPool
     else:
         # Serverless-safe: no persistent pool. Each checkout opens a fresh
-        # connection (use the provider's pooled -pooler endpoint, e.g. Neon
-        # PgBouncer in transaction mode) instead of holding idle connections
-        # across frozen function instances.
+        # connection (use the Supabase session-pooler endpoint) instead of
+        # holding idle connections across frozen function instances.
         kwargs["poolclass"] = NullPool
     return create_engine(database_url, **kwargs)
 

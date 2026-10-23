@@ -1,5 +1,9 @@
 # CodeMentor AI — Project Overview
 
+> **Historical document (pre-Supabase migration).** Auth, storage, and deploy
+> details below describe the previous system. See the root `README.md` for the
+> current Supabase Auth + PostgreSQL + RLS architecture.
+
 Comprehensive technical and product reference for the existing repository.
 Source of truth is the code itself; each claim is marked
 **VERIFIED** (executed), **IMPLEMENTED** (in code + tests, awaiting live proof),
@@ -51,12 +55,12 @@ projects + references. Planned: practice sessions, retrieval evaluation.
   `NetworkOnly`.
 - **Hosting**: Frontend live on Vercel (`https://codementor-ai.vercel.app`)
   with a GitHub Pages mirror; backend live on Vercel
-  (`https://codementor-ai-api.vercel.app`); Neon Postgres in production.
+  (`https://codementor-ai-api.vercel.app`); Supabase Postgres in production.
 
 ```mermaid
 flowchart LR
     Browser["React app<br/>(Vercel + GitHub Pages)"] -->|HTTPS + JWT<br/>or guest token| API["FastAPI<br/>(vercel-ai-api)"]
-    API --> DB[("Neon Postgres<br/>(production)")]
+    API --> DB[("Supabase Postgres<br/>(production)")]
     API --> LLM["LLM manager<br/>(fallback chain)"]
     LLM --> G["Groq SDK<br/>(verified live)"]
     LLM --> F["Gemini / OpenAI / Anthropic<br/>(adapters only)"]
@@ -236,7 +240,7 @@ verification/tokens), `ef19ab…` (notifications/preferences),
 `dc55a8…` (sessions.mode, default `practice`), `3a1c9d47b802` (user
 learning preferences: `preferred_language`, `experience_level`,
 `learning_goal` with safe `""` defaults). Fresh DBs migrate cleanly
-(proven by the test suite, which upgrades scratch DBs; production Neon is
+(proven by the test suite, which upgrades scratch DBs; production Supabase is
 migrated and live — verified 2026-10-16/17 by a real profile PATCH round-trip).
 Single head: `3a1c9d47b802`.
 
@@ -299,7 +303,7 @@ Variable for Pages builds.
   are no-ops when the schema is current. Alternatives documented in the repo:
   `render.yaml` Blueprint and `backend/Dockerfile` for HF Spaces — neither is
   in production.
-- **DB**: Neon free Postgres; URL pinned to `postgresql+psycopg2://`
+- **DB**: Supabase free Postgres; URL pinned to `postgresql+psycopg2://`
   (`app.database.normalize_database_url`) and stored only as a Vercel secret.
 - **CORS**: exact allow-list (`codementor-ai.vercel.app`,
   `astroelaa.github.io`, plus local dev ports).

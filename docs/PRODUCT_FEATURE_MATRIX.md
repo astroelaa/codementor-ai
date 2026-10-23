@@ -1,5 +1,9 @@
 # CodeMentor AI — Product Feature Matrix
 
+> **Historical document (pre-Supabase migration).** Auth endpoints, `is_verified`,
+> and guest-token details below describe the previous system. See the root
+> `README.md` for the current Supabase Auth + RLS architecture.
+
 Living audit of every user-facing feature. How to read the columns:
 
 - **Frontend** — real UI access on `https://codementor-ai.vercel.app`

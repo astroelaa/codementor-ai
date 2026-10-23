@@ -1,6 +1,7 @@
 # Render blueprint: deploys backend/ as a free Python web service.
-# Secrets (DATABASE_URL, JWT_SECRET, *_API_KEY, ALLOWED_ORIGINS) are set in
-# the Render dashboard under Environment. They never appear in this file.
+# Secrets (DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+# SUPABASE_ANON_KEY, *_API_KEY, ALLOWED_ORIGINS) are set in the Render
+# dashboard under Environment. They never appear in this file.
 services:
   - type: web
     name: codementor-ai-api
@@ -16,7 +17,11 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
-      - key: JWT_SECRET
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false

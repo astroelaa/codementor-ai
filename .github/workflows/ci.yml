@@ -1,5 +1,6 @@
 # Continuous integration: backend tests + frontend typecheck/build.
-# Uses mocked/fake providers only — no live AI calls, no secrets needed.
+# Uses the fake LLM (no live AI calls) and a live Supabase Auth project for
+# identity/RLS tests. Add the three Supabase repository secrets before merging.
 name: CI
 
 on:
@@ -33,6 +34,10 @@ jobs:
       - name: Tests
         working-directory: backend
         run: python -m pytest -q -p no:warnings
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
   frontend:
     runs-on: ubuntu-latest

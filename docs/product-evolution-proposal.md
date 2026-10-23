@@ -1,5 +1,9 @@
 # CodeMentor AI — Product Evolution Proposal (Phase 0)
 
+> **Historical document (pre-Supabase migration).** Auth and database details
+> below describe the previous system. See the root `README.md` for the current
+> Supabase Auth + PostgreSQL + RLS architecture.
+
 Read-only audit of the repository at `main`, verified 2026-10-14 by
 inspecting code, running the test suite (58 passed), the production build,
 and one live Groq mentor turn (HTTP 200). No application code was changed
@@ -62,7 +66,7 @@ SQLite locally; Postgres via `DATABASE_URL`; migrations `64bf→f4c926f→8f967a
   Free-tier quotas apply; model IDs rot — re-check on any 4xx.
 - **Gemini/OpenAI/Anthropic adapters**: code-complete, never live-tested.
   Keep disabled until one is verified; do NOT add more providers.
-- **Neon Postgres**: chosen, not yet provisioned (account action).
+- **Supabase Postgres**: chosen, not yet provisioned (account action).
 - **Render/HF**: configs committed, not yet deployed (card wall on Render).
 - **Judge0**: not integrated — evaluate only if execution becomes required.
 - **GitHub repo integration**: none — defer unless a milestone needs it.
@@ -75,7 +79,7 @@ Cost: Groq free tier is the only confirmed-free inference; streaming doubles
 calls per turn (reply + scoring) by design. Licensing: no LICENSE file yet —
 add MIT before public release; Exercism content is CC-BY-SA-friendly but verify
 per-track; MDN is CC-BY-SA 2.5 (attribute + link); never scrape wholesale.
-Deploy: Pages static only; backend needs a host + Neon; free tiers sleep.
+Deploy: Pages static only; backend needs a host + Supabase; free tiers sleep.
 
 ## 6. Product direction (mapped to existing components)
 

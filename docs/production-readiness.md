@@ -1,5 +1,9 @@
 # CodeMentor AI — Production Readiness Audit
 
+> **Historical document (pre-Supabase migration).** JWT/bcrypt details and
+> blocker notes below describe the previous system. See the root `README.md`
+> for the current Supabase Auth + PostgreSQL + RLS architecture.
+
 Date: 2026-10-14. Source of truth: this repository at `main`.
 Baseline checks (re-ran): backend pytest **38 passed**; frontend `tsc + vite build` **pass**.
 
@@ -17,7 +21,7 @@ Baseline checks (re-ran): backend pytest **38 passed**; frontend `tsc + vite bui
   only providers with keys are tried. SQLite locally, `DATABASE_URL` for Postgres.
   One Alembic revision on `main`.
 - **Deploy**: Pages via `.github/workflows/pages.yml`; backend via `render.yaml`
-  (Blueprint) or `backend/Dockerfile` (HF Spaces, no card). DB: Neon (pending).
+  (Blueprint) or `backend/Dockerfile` (HF Spaces, no card). DB: Supabase (pending).
 
 ## 2. Verified working (executed, not assumed)
 
@@ -49,7 +53,7 @@ Live Groq turn verified 2026-10-09 (HTTP 200, Socratic reply, no code leaked).
 - Token-usage recording (in stash, unverified).
 - PWA (no manifest/service worker/icons).
 - Backup/restore docs; privacy data-flow doc (Legal pages are generic).
-- Production smoke test against Neon (blocked on account access + backend URL).
+- Production smoke test against Supabase (blocked on account access + backend URL).
 
 ## 5. Fixes applied during this mission
 
@@ -94,7 +98,7 @@ Live Groq turn verified 2026-10-09 (HTTP 200, Socratic reply, no code leaked).
 
 ## 6. Outstanding deployment blockers (account actions)
 
-- Neon project + `DATABASE_URL` (user).
+- Supabase project + `DATABASE_URL` (user).
 - Backend host deploy (Render card-wall vs HF Spaces) + env vars (user pastes).
 - `VITE_API_BASE_URL` repo variable → Pages rebuild (user or agent with access).
 - Fresh Groq key rotation after chat exposure (user; current key works).
