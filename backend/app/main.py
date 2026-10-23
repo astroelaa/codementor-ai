@@ -14,6 +14,7 @@ from app.errors import http_exception_handler, unhandled_exception_handler
 from app.llm.manager import LLMManager
 from app.rate_limit import RateLimiter
 from app.routers import auth, docs, memory, mentor, meta, notifications, progress, projects
+from app.supabase_auth import build_jwks_client
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -46,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = build_session_factory(engine)
     app.state.llm_manager = LLMManager(settings)
     app.state.rate_limiter = RateLimiter()
+    app.state.jwks_client = build_jwks_client(settings)
 
     app.add_middleware(
         CORSMiddleware,
@@ -73,8 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "version": "2.0.0",
             "endpoints": [
                 "/health",
-                "/api/auth/signup",
-                "/api/auth/login",
+                "/api/auth/me",
                 "/api/sessions",
                 "/api/snippets",
             ],

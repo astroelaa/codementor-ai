@@ -12,7 +12,8 @@ def _prod_settings(**overrides):
     base = {
         "database_url": TEST_DB_URL,
         "environment": "production",
-        "jwt_secret": "a" * 40,
+        "supabase_url": "https://project.supabase.co",
+        "supabase_service_role_key": "service-role-test-key",
     }
     base.update(overrides)
     return Settings(**base)
@@ -24,10 +25,13 @@ def test_production_defaults_rejected():
             Settings(
                 database_url=TEST_DB_URL,
                 environment="production",
-                jwt_secret="development-only-secret-change-me",
+                supabase_url="",
+                supabase_service_role_key="",
             )
         )
-    assert "JWT_SECRET" in str(exc_info.value)
+    message = str(exc_info.value)
+    assert "SUPABASE_URL" in message
+    assert "SUPABASE_SERVICE_ROLE_KEY" in message
 
 
 def test_production_sqlite_rejected():
@@ -36,14 +40,10 @@ def test_production_sqlite_rejected():
     assert "PostgreSQL" in str(exc_info.value)
 
 
-def test_production_short_secret_rejected():
-    with pytest.raises(RuntimeError):
-        create_app(
-            _prod_settings(
-                database_url="postgresql+psycopg2://u:p@h/db",
-                jwt_secret="too-short",
-            )
-        )
+def test_production_missing_service_key_rejected():
+    with pytest.raises(RuntimeError) as exc_info:
+        create_app(_prod_settings(supabase_service_role_key=""))
+    assert "SUPABASE_SERVICE_ROLE_KEY" in str(exc_info.value)
 
 
 def test_production_valid_config_starts():
@@ -83,8 +83,6 @@ def test_request_id_header_present_and_echoed():
 
 
 def test_default_origins_include_hosted_frontend():
-    from app.config import Settings
-
     origins = Settings().origins
     assert "https://astroelaa.github.io" in origins
 

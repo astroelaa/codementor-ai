@@ -1,6 +1,6 @@
 """Project briefs, milestones, tasks: persistence, ownership, progression."""
 
-from tests.conftest import auth_headers, client, make_user
+from tests.conftest import auth_headers, client, make_guest, make_user
 from tests.fake_llm import BRIEF_JSON
 
 
@@ -175,9 +175,11 @@ def test_session_project_link(user_headers):
     assert r.status_code == 404
 
 
-def test_guest_cannot_link_project():
+def test_guest_cannot_link_missing_project():
+    _, headers = make_guest(client)
     r = client.post(
         "/api/sessions",
         json={"language": "python", "code": "x = 1", "project_id": "whatever"},
+        headers=headers,
     )
-    assert r.status_code == 422
+    assert r.status_code == 404

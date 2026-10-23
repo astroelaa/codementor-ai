@@ -3,53 +3,16 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Auth -----------------------------------------------------------------
-class SignupRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
-    display_name: str = Field(default="", max_length=120)
-
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=1, max_length=128)
-
-
-class PasswordBody(BaseModel):
-    password: str = Field(min_length=1, max_length=128)
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class EmailRequest(BaseModel):
-    email: EmailStr
-
-
-class TokenBody(BaseModel):
-    token: str = Field(min_length=10, max_length=200)
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str = Field(min_length=10, max_length=200)
-    new_password: str = Field(min_length=8, max_length=128)
-
-
-class MessageResponse(BaseModel):
-    message: str
-
-
 class UserResponse(BaseModel):
     id: str
-    email: str
+    email: Optional[str]
     display_name: str
     theme: str
-    is_verified: bool = False
+    is_anonymous: bool = False
     notify_security_emails: bool = True
     notify_progress_emails: bool = False
     preferred_language: str = ""
@@ -73,11 +36,6 @@ class UpdateProfileRequest(BaseModel):
     preferred_language: Optional[str] = Field(default=None, max_length=32)
     experience_level: Optional[str] = Field(default=None, max_length=20)
     learning_goal: Optional[str] = Field(default=None, max_length=32)
-
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str = Field(min_length=1, max_length=128)
-    new_password: str = Field(min_length=8, max_length=128)
 
 
 # --- Mentor ---------------------------------------------------------------
@@ -228,7 +186,6 @@ class SessionBase(BaseModel):
     created_at: datetime
     updated_at: datetime
     solved_at: Optional[datetime] = None
-    guest_token: Optional[str] = None
     badges_earned: list[BadgeResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}

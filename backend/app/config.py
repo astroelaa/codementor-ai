@@ -1,7 +1,8 @@
 """Application configuration.
 
-Every secret (API keys, JWT secret, database URL) comes from the environment
-or from backend/.env, which is git-ignored. Nothing secret is hardcoded here.
+Every secret (API keys, service-role key, database URL) comes from the
+environment or from backend/.env, which is git-ignored. Nothing secret is
+hardcoded here.
 """
 
 from functools import lru_cache
@@ -18,11 +19,11 @@ class Settings(BaseSettings):
     environment: str = "development"  # development | test | production
     database_url: str = "sqlite:///./codementor.db"
 
-    jwt_secret: str = "development-only-secret-change-me"
-    jwt_algorithm: str = "HS256"
-    jwt_expire_days: int = 7
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_role_key: str = ""
 
-    # --- Email (transactional only: verification + password reset) ---------
+    # --- Email (transactional only: solve notifications) -------------------
     # console: prints recipient + subject to stdout (dev). smtp: real
     # delivery via stdlib smtplib (no new dependencies). resend: real
     # delivery via the Resend HTTP API (needs RESEND_API_KEY).
@@ -33,7 +34,6 @@ class Settings(BaseSettings):
     email_smtp_user: str = ""
     email_smtp_password: str = ""
     resend_api_key: str = ""
-    frontend_url: str = "https://astroelaa.github.io/codementor-ai"
 
     # Comma-separated browser origins allowed to call this API.
     # The GitHub Pages frontend origin is included so production works even
@@ -67,8 +67,6 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-3-5-haiku-20241022"
 
     # --- Rate limits ("<count>/<second|minute|hour|day>") ----------------
-    rate_limit_signup: str = "10/minute"
-    rate_limit_login: str = "10/minute"
     rate_limit_mentor: str = "30/minute"
 
     # --- Mentor behaviour -------------------------------------------------
@@ -89,10 +87,10 @@ class Settings(BaseSettings):
         if not self.is_production:
             return
         problems: list[str] = []
-        if self.jwt_secret == "development-only-secret-change-me":
-            problems.append("JWT_SECRET still holds the development default")
-        elif len(self.jwt_secret) < 32:
-            problems.append("JWT_SECRET must be at least 32 characters")
+        if not self.supabase_url:
+            problems.append("SUPABASE_URL is not set")
+        if not self.supabase_service_role_key:
+            problems.append("SUPABASE_SERVICE_ROLE_KEY is not set")
         if not (
             self.database_url.startswith("postgresql")
             or self.database_url.startswith("postgres://")

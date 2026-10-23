@@ -9,7 +9,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session as DbSession
 
 from app import deps
-from app.deps import guest_token_from, new_guest_token
 from app.errors import llm_error_to_http
 from app.llm.errors import LLMError
 from app.llm.manager import LLMManager
@@ -51,6 +50,7 @@ from app.services.mentor import (
     extract_json_dict,
     parse_feedback,
 )
+from app.services.notifications import notify
 from app.services.orchestration import (
     RETRY_ELIGIBLE_INTENTS,
     classify_intent,
@@ -87,18 +87,13 @@ def _load_session(
     db: DbSession,
     session_id: str,
     *,
-    user: User | None,
-    guest_token: str | None,
+    user: User,
 ) -> DebugSession:
     session = db.query(DebugSession).filter(DebugSession.id == session_id).first()
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found.")
-    if user is not None:
-        if session.user_id != user.id:
-            raise HTTPException(status_code=403, detail="Not your session.")
-        return session
-    if not guest_token or session.guest_token != guest_token:
-        raise HTTPException(status_code=404, detail="Session not found.")
+    if session.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not your session.")
     return session
 
 
@@ -110,9 +105,7 @@ def _require_active(session: DebugSession) -> None:
         )
 
 
-def _session_base(
-    session: DebugSession, *, guest_token: str | None, badges=()
-) -> SessionBase:
+def _session_base(session: DebugSession, *, badges=()) -> SessionBase:
     return SessionBase(
         id=session.id,
         language=session.language,
@@ -122,11 +115,10 @@ def _session_base(
         code=session.code,
         status=session.status,
         understanding_score=session.understanding_score,
-        hints_left=0,  # filled in by callers that know the settings
+        hints_left=0,
         created_at=session.created_at,
         updated_at=session.updated_at,
         solved_at=session.solved_at,
-        guest_token=guest_token if session.user_id is None else None,
         badges_earned=list(badges),
     )
 
@@ -135,11 +127,10 @@ def _session_detail(
     request: Request,
     session: DebugSession,
     *,
-    guest_token: str | None,
     badges=(),
 ) -> SessionDetailResponse:
     settings = request.app.state.settings
-    base = _session_base(session, guest_token=guest_token, badges=badges)
+    base = _session_base(session, badges=badges)
     base.hints_left = _hints_left(settings, session)
     return SessionDetailResponse(
         **base.model_dump(),
@@ -230,7 +221,7 @@ def _to_usage_info(usage: dict | None) -> UsageInfo | None:
 def _persist_assistant_turn(
     db: DbSession,
     session: DebugSession,
-    user: User | None,
+    user: User,
     feedback: MentorFeedback,
     *,
     provider: str,
@@ -243,7 +234,7 @@ def _persist_assistant_turn(
     if feedback.misconception is not None:
         stored_misc = Misconception(
             session_id=session.id,
-            user_id=user.id if user else None,
+            user_id=user.id,
             type=feedback.misconception.type.strip()[:64],
             description=feedback.misconception.description.strip(),
         )
@@ -281,10 +272,9 @@ def _persist_assistant_turn(
     db.refresh(message)
     if stored_misc is not None:
         db.refresh(stored_misc)
-    if user is not None:
-        record_activity(db, user.id, messages=1)
-        if stored_misc is not None:
-            bump_skill(db, user.id, stored_misc.type)
+    record_activity(db, user.id, messages=1)
+    if stored_misc is not None:
+        bump_skill(db, user.id, stored_misc.type)
     return message, stored_misc
 
 
@@ -311,7 +301,7 @@ def _mentor_reply(
     db: DbSession,
     request: Request,
     session: DebugSession,
-    user: User | None,
+    user: User,
     manager: LLMManager,
     system: str,
     history: list[dict],
@@ -390,7 +380,7 @@ def _composed_turn_response(
     db: DbSession,
     request: Request,
     session: DebugSession,
-    user: User | None,
+    user: User,
     reply: str,
     verdict: str | None,
 ) -> MentorMessageResponse:
@@ -441,7 +431,7 @@ def create_session(
     payload: SessionCreate,
     request: Request,
     db: DbSession = Depends(deps.get_db),
-    user: User | None = Depends(deps.get_optional_user),
+    user: User = Depends(deps.get_current_user),
 ):
     ensure_reference_data(db)
     stripped_code = payload.code.strip()
@@ -461,26 +451,23 @@ def create_session(
                     "Select a language explicitly."
                 ),
             )
-    guest_token: str | None = None
-    if user is None:
-        guest_token = guest_token_from(request) or new_guest_token()
+    if user.is_anonymous:
         used = (
             db.query(DebugSession)
-            .filter(DebugSession.guest_token == guest_token)
+            .filter(DebugSession.user_id == user.id)
             .count()
         )
         if used >= GUEST_SESSION_LIMIT:
             raise HTTPException(
                 status_code=403,
                 detail=(
-                    "Guest mode includes 1 free session, which this device "
+                    "Guest mode includes 1 free session, which this account "
                     "has used. Create a free account to continue."
                 ),
             )
     session = DebugSession(
         id=str(uuid.uuid4()),
-        user_id=user.id if user else None,
-        guest_token=guest_token,
+        user_id=user.id,
         language=language,
         goal=payload.goal,
         mode=payload.mode,
@@ -488,11 +475,6 @@ def create_session(
         status="active",
     )
     if payload.project_id:
-        if user is None:
-            raise HTTPException(
-                status_code=422,
-                detail="Linking a session to a project requires an account.",
-            )
         project = (
             db.query(Project)
             .filter(Project.id == payload.project_id, Project.user_id == user.id)
@@ -505,41 +487,29 @@ def create_session(
     db.commit()
     db.refresh(session)
     badges: list = []
-    if user is not None:
-        record_activity(db, user.id, sessions=1)
-        first = award_badge(db, user.id, "first-session")
-        if first is not None:
-            badges.append(BadgeResponse.model_validate(first))
-    return _session_detail(request, session, guest_token=guest_token, badges=badges)
+    record_activity(db, user.id, sessions=1)
+    first = award_badge(db, user.id, "first-session")
+    if first is not None:
+        badges.append(BadgeResponse.model_validate(first))
+    return _session_detail(request, session, badges=badges)
 
 
 @router.get("/sessions", response_model=list[SessionBase])
 def list_sessions(
     request: Request,
     db: DbSession = Depends(deps.get_db),
-    user: User | None = Depends(deps.get_optional_user),
+    user: User = Depends(deps.get_current_user),
 ):
     settings = request.app.state.settings
-    guest_token = guest_token_from(request)
-    if user is not None:
-        rows = (
-            db.query(DebugSession)
-            .filter(DebugSession.user_id == user.id)
-            .order_by(DebugSession.updated_at.desc())
-            .all()
-        )
-    elif guest_token:
-        rows = (
-            db.query(DebugSession)
-            .filter(DebugSession.guest_token == guest_token)
-            .order_by(DebugSession.updated_at.desc())
-            .all()
-        )
-    else:
-        raise HTTPException(status_code=401, detail="Not authenticated.")
+    rows = (
+        db.query(DebugSession)
+        .filter(DebugSession.user_id == user.id)
+        .order_by(DebugSession.updated_at.desc())
+        .all()
+    )
     result = []
     for row in rows:
-        base = _session_base(row, guest_token=guest_token)
+        base = _session_base(row)
         base.hints_left = _hints_left(settings, row)
         result.append(base)
     return result
@@ -550,14 +520,10 @@ def get_session(
     session_id: str,
     request: Request,
     db: DbSession = Depends(deps.get_db),
-    user: User | None = Depends(deps.get_optional_user),
+    user: User = Depends(deps.get_current_user),
 ):
-    session = _load_session(
-        db, session_id, user=user, guest_token=guest_token_from(request)
-    )
-    return _session_detail(
-        request, session, guest_token=guest_token_from(request)
-    )
+    session = _load_session(db, session_id, user=user)
+    return _session_detail(request, session)
 
 
 @router.post(
@@ -570,13 +536,11 @@ def post_message(
     payload: MessageCreate,
     request: Request,
     db: DbSession = Depends(deps.get_db),
-    user: User | None = Depends(deps.get_optional_user),
+    user: User = Depends(deps.get_current_user),
     manager: LLMManager = Depends(deps.get_llm_manager),
 ):
     settings = request.app.state.settings
-    session = _load_session(
-        db, session_id, user=user, guest_token=guest_token_from(request)
-    )
+    session = _load_session(db, session_id, user=user)
     _require_active(session)
     if len(session.messages) >= settings.max_session_messages:
         raise HTTPException(
@@ -643,13 +607,11 @@ def post_message_stream(
     payload: MessageCreate,
     request: Request,
     db: DbSession = Depends(deps.get_db),
-    user: User | None = Depends(deps.get_optional_user),
+    user: User = Depends(deps.get_current_user),
     manager: LLMManager = Depends(deps.get_llm_manager),
 ):
     settings = request.app.state.settings
-    session = _load_session(
-        db, session_id, user=user, guest_token=guest_token_from(request)
-    )
+    session = _load_session(db, session_id, user=user)
     _require_active(session)
     if len(session.messages) >= settings.max_session_messages:
         raise HTTPException(
@@ -933,14 +895,12 @@ def request_hint(
     session_id: str,
     request: Request,
     db: DbSession = Depends(deps.get_db),
-    user: User | None = Depends(deps.get_optional_user),
+    user: User = Depends(deps.get_current_user),
     manager: LLMManager = Depends(deps.get_llm_manager),
     payload: HintRequest | None = None,
 ):
     settings = request.app.state.settings
-    session = _load_session(
-        db, session_id, user=user, guest_token=guest_token_from(request)
-    )
+    session = _load_session(db, session_id, user=user)
     _require_active(session)
     if session.hints_used >= settings.max_hints_per_session:
         raise HTTPException(
@@ -1001,14 +961,12 @@ def submit_explanation(
     payload: ExplainRequest,
     request: Request,
     db: DbSession = Depends(deps.get_db),
-    user: User | None = Depends(deps.get_optional_user),
+    user: User = Depends(deps.get_current_user),
     manager: LLMManager = Depends(deps.get_llm_manager),
     mailer: EmailBackend = Depends(get_email_backend),
 ):
     settings = request.app.state.settings
-    session = _load_session(
-        db, session_id, user=user, guest_token=guest_token_from(request)
-    )
+    session = _load_session(db, session_id, user=user)
     _require_active(session)
     explanation = payload.explanation.strip()
     if not explanation:
@@ -1059,28 +1017,25 @@ def submit_explanation(
         session.understanding_score = max(
             session.understanding_score, judged.score
         )
-        if user is not None:
-            from app.services.notifications import notify
-
-            record_activity(db, user.id, messages=1)
-            earned = award_on_solve(db, user, session)
-            badges = [BadgeResponse.model_validate(b) for b in earned]
-            notify(
-                db,
-                user.id,
-                "solve",
-                "Session solved",
-                f"You explained the fix in your own words (score {judged.score}).",
-            )
-            if user.notify_progress_emails:
-                try:
-                    mailer.send(
-                        solve_congrats_email(
-                            user.email, session.language, judged.score
-                        )
+        record_activity(db, user.id, messages=1)
+        earned = award_on_solve(db, user, session)
+        badges = [BadgeResponse.model_validate(b) for b in earned]
+        notify(
+            db,
+            user.id,
+            "solve",
+            "Session solved",
+            f"You explained the fix in your own words (score {judged.score}).",
+        )
+        if user.notify_progress_emails and user.email:
+            try:
+                mailer.send(
+                    solve_congrats_email(
+                        user.email, session.language, judged.score
                     )
-                except Exception:
-                    pass  # email is best-effort; the solve already persisted
+                )
+            except Exception:
+                pass
 
     db.add(
         Message(

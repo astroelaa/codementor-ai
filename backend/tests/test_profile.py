@@ -1,4 +1,4 @@
-"""Profile endpoints: PATCH /me preferences and POST /change-password."""
+"""Profile endpoints: PATCH /me preferences."""
 
 from tests.conftest import auth_headers, make_user
 
@@ -79,72 +79,3 @@ def test_patch_me_clears_preferences_with_empty_string(test_client):
     assert r.status_code == 200, r.text
     assert r.json()["preferred_language"] == ""
     assert r.json()["experience_level"] == ""
-
-
-def test_change_password_requires_current_password(test_client):
-    user, password = make_user(test_client)
-    headers = auth_headers(test_client, user["email"], password)
-    r = test_client.post(
-        "/api/auth/change-password",
-        json={"current_password": "wrong-password", "new_password": "newsecret456"},
-        headers=headers,
-    )
-    assert r.status_code == 401, r.text
-
-
-def test_change_password_rejects_same_password(test_client):
-    user, password = make_user(test_client)
-    headers = auth_headers(test_client, user["email"], password)
-    r = test_client.post(
-        "/api/auth/change-password",
-        json={"current_password": password, "new_password": password},
-        headers=headers,
-    )
-    assert r.status_code == 409, r.text
-
-
-def test_change_password_rotates_token_and_old_token_dies(test_client):
-    user, password = make_user(test_client)
-    r = test_client.post(
-        "/api/auth/login", json={"email": user["email"], "password": password}
-    )
-    old_token = r.json()["access_token"]
-    old_headers = {"Authorization": f"Bearer {old_token}"}
-
-    r = test_client.post(
-        "/api/auth/change-password",
-        json={"current_password": password, "new_password": "brand-new-789"},
-        headers=old_headers,
-    )
-    assert r.status_code == 200, r.text
-    new_token = r.json()["access_token"]
-    assert new_token != old_token
-
-    # Old token is revoked by the token_version bump...
-    assert (
-        test_client.get("/api/auth/me", headers=old_headers).status_code == 401
-    )
-    # ...while the fresh token keeps working, and the new password persists
-    # via a completely fresh login.
-    new_headers = {"Authorization": f"Bearer {new_token}"}
-    assert test_client.get("/api/auth/me", headers=new_headers).status_code == 200
-    login = test_client.post(
-        "/api/auth/login",
-        json={"email": user["email"], "password": "brand-new-789"},
-    )
-    assert login.status_code == 200, login.text
-    assert (
-        test_client.post(
-            "/api/auth/login",
-            json={"email": user["email"], "password": password},
-        ).status_code
-        == 401
-    )
-
-
-def test_change_password_requires_auth(test_client):
-    r = test_client.post(
-        "/api/auth/change-password",
-        json={"current_password": "x", "new_password": "y"},
-    )
-    assert r.status_code in (401, 403)

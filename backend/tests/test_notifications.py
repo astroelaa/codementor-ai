@@ -1,6 +1,8 @@
 """Notifications: persistence, ownership, retention, preferences."""
 
+from app.models import Notification, User
 from app.services.email import MemoryEmailBackend, get_email_backend
+from app.services.notifications import notify
 from tests.conftest import PYTHON_CODE, auth_headers, client, make_user
 from tests.fake_llm import JUDGE_PASS_JSON
 
@@ -15,28 +17,21 @@ def _teardown():
     client.app.dependency_overrides.pop(get_email_backend, None)
 
 
-def _authed():
-    user, pw = make_user(client)
-    return auth_headers(client, user["email"], pw)
-
-
-def test_welcome_notification_on_signup():
-    headers = _authed()
-    r = client.get("/api/notifications", headers=headers)
-    assert r.status_code == 200, r.text
-    items = r.json()
-    assert len(items) == 1
-    assert items[0]["type"] == "welcome"
-    assert items[0]["read"] is False
-
-    r = client.get("/api/notifications/unread-count", headers=headers)
-    assert r.json() == {"count": 1}
+def _notify(headers, title="Hello"):
+    me = client.get("/api/auth/me", headers=headers).json()
+    db = client.app.state.session_factory()
+    try:
+        note = notify(db, me["id"], "test", title)
+        db.commit()
+        return note.id
+    finally:
+        db.close()
 
 
 def test_mark_read_and_read_all(user_headers):
-    client.get("/api/notifications", headers=user_headers)
+    nid = _notify(user_headers)
     items = client.get("/api/notifications", headers=user_headers).json()
-    nid = items[0]["id"]
+    assert len(items) == 1
 
     r = client.patch(f"/api/notifications/{nid}/read", headers=user_headers)
     assert r.status_code == 200
@@ -48,14 +43,12 @@ def test_mark_read_and_read_all(user_headers):
 
 
 def test_notifications_isolated_per_user(user_headers):
-    items = client.get("/api/notifications", headers=user_headers).json()
-    nid = items[0]["id"]
+    nid = _notify(user_headers)
     other, pw = make_user(client)
     other_headers = auth_headers(client, other["email"], pw)
 
     assert client.patch(f"/api/notifications/{nid}/read", headers=other_headers).status_code == 404
-    # The other user only sees their own welcome notification.
-    assert len(client.get("/api/notifications", headers=other_headers).json()) == 1
+    assert client.get("/api/notifications", headers=other_headers).json() == []
 
 
 def test_solve_and_badge_emit_notifications(user_headers, fake_llm):
@@ -78,7 +71,6 @@ def test_solve_and_badge_emit_notifications(user_headers, fake_llm):
 def test_progress_email_only_when_opted_in(user_headers, fake_llm):
     mem = _mem()
     try:
-        # Default prefs: no progress email.
         r = client.post(
             "/api/sessions", json={"language": "python", "code": PYTHON_CODE}, headers=user_headers
         )
@@ -88,7 +80,6 @@ def test_progress_email_only_when_opted_in(user_headers, fake_llm):
         client.post(f"/api/sessions/{sid}/explain", json={"explanation": "y" * 20}, headers=user_headers)
         assert mem.sent == []
 
-        # Opt in: next solve sends exactly one.
         r = client.patch("/api/auth/me", json={"notify_progress_emails": True}, headers=user_headers)
         assert r.json()["notify_progress_emails"] is True
         r = client.post(
@@ -105,15 +96,12 @@ def test_progress_email_only_when_opted_in(user_headers, fake_llm):
 
 
 def test_retention_caps_at_100(user_headers):
-    from app.models import Notification
-
     db = client.app.state.session_factory()
     try:
         me = client.get("/api/auth/me", headers=user_headers).json()
         for i in range(105):
             db.add(Notification(user_id=me["id"], type="test", title=f"t{i}"))
         db.commit()
-        from app.services.notifications import notify
 
         notify(db, me["id"], "test", "one-more")
         db.commit()
@@ -125,23 +113,19 @@ def test_retention_caps_at_100(user_headers):
         db.close()
 
 
-def test_delete_account_removes_notifications(user_headers):
-    items = client.get("/api/notifications", headers=user_headers).json()
-    assert len(items) >= 1
-    me = client.get("/api/auth/me", headers=user_headers).json()
+def test_delete_account_revokes_identity_and_keeps_other_users():
+    user, pw = make_user(client)
+    headers = auth_headers(client, user["email"], pw)
 
-    from app.models import Notification
+    other, other_pw = make_user(client)
+    other_headers = auth_headers(client, other["email"], other_pw)
+
+    assert client.delete("/api/auth/me", headers=headers).status_code == 204
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+    assert client.get("/api/auth/me", headers=other_headers).status_code == 200
 
     db = client.app.state.session_factory()
     try:
-        user, pw = make_user(client)
-        headers = auth_headers(client, user["email"], pw)
-        uid = client.get("/api/auth/me", headers=headers).json()["id"]
-        before = db.query(Notification).filter(Notification.user_id == uid).count()
-        assert before >= 1
-        client.request("DELETE", "/api/auth/me", json={"password": pw}, headers=headers)
-        after = db.query(Notification).filter(Notification.user_id == uid).count()
-        assert after == 0
+        assert db.query(User).filter(User.id == user["id"]).first() is None
     finally:
         db.close()
-    assert me["id"]  # untouched user still fine

@@ -1,4 +1,4 @@
-"""Transactional email abstraction (verification + password reset only).
+"""Transactional email abstraction for solve notifications.
 
 Three backends:
 - console: logs recipient + subject to stdout (local dev). Never logs bodies
@@ -39,7 +39,6 @@ class EmailBackend:
 
 class ConsoleEmailBackend(EmailBackend):
     def send(self, email: OutgoingEmail) -> None:
-        # Recipient + subject only: bodies carry single-use links.
         log.info("email to=%s subject=%s", email.to, email.subject)
 
 
@@ -180,45 +179,6 @@ def get_email_backend(request: Request) -> EmailBackend:
 
 
 BRAND = "CodeMentor AI"
-
-
-def verification_email(to: str, link: str) -> OutgoingEmail:
-    return OutgoingEmail(
-        to=to,
-        subject=f"{BRAND} — verify your email",
-        text=(
-            f"Welcome to {BRAND}!\n\n"
-            "Please verify your email address by opening this link "
-            f"(valid 24 hours, single use):\n\n{link}\n\n"
-            "If you did not create this account, just ignore this message.\n"
-        ),
-    )
-
-
-def reset_email(to: str, link: str) -> OutgoingEmail:
-    return OutgoingEmail(
-        to=to,
-        subject=f"{BRAND} — password reset",
-        text=(
-            f"You asked to reset your {BRAND} password.\n\n"
-            "Open this link to choose a new one "
-            f"(valid 1 hour, single use):\n\n{link}\n\n"
-            "If you did not ask for this, just ignore this message — "
-            "your password stays unchanged.\n"
-        ),
-    )
-
-
-def password_changed_email(to: str) -> OutgoingEmail:
-    return OutgoingEmail(
-        to=to,
-        subject=f"{BRAND} — your password was changed",
-        text=(
-            f"The password for your {BRAND} account was just changed.\n\n"
-            "If this was you, nothing to do. If not, request a reset "
-            "immediately and contact support.\n"
-        ),
-    )
 
 
 def solve_congrats_email(to: str, language: str, score: int) -> OutgoingEmail:

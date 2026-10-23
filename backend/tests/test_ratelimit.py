@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.deps import get_llm_manager
 from app.main import create_app
-from tests.conftest import TEST_DB_URL, fake
+from tests.conftest import TEST_DB_URL, auth_headers, fake, make_user
 
 
 def test_mentor_rate_limit():
@@ -14,16 +14,8 @@ def test_mentor_rate_limit():
     rate_app.dependency_overrides[get_llm_manager] = lambda: fake
     rate_client = TestClient(rate_app)
 
-    r = rate_client.post(
-        "/api/auth/signup",
-        json={"email": "limited@example.com", "password": "secret123"},
-    )
-    assert r.status_code == 201
-    r = rate_client.post(
-        "/api/auth/login",
-        json={"email": "limited@example.com", "password": "secret123"},
-    )
-    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    user, password = make_user(rate_client)
+    headers = auth_headers(rate_client, user["email"], password)
 
     # 1st mentor call: create the session.
     r = rate_client.post(

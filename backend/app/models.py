@@ -532,7 +532,3 @@ class Notification(Base):
         primaryjoin="User.id == Notification.user_id",
         foreign_keys="Notification.user_id",
     )
-
-
-class AuthToken:
-    pass

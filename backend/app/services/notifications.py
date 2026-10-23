@@ -1,8 +1,8 @@
 """In-app notifications: created once per meaningful event, owned per user.
 
 Emission points (all inside the event's own transaction, so HTTP retries
-cannot duplicate them): signup → welcome; newly awarded badge → badge;
-passing explanation → solve. Password changes notify by email instead.
+cannot duplicate them): newly awarded badge → badge; passing explanation
+→ solve.
 """
 
 from sqlalchemy.orm import Session as DbSession

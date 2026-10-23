@@ -1,88 +1,110 @@
-"""Auth tests: signup, login, profile, delete account."""
+"""Authentication and profile tests backed by Supabase tokens."""
 
-from tests.conftest import auth_headers, client, make_user
+import time
+import uuid
+from types import SimpleNamespace
+
+import jwt
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from tests.conftest import (
+    admin_get_user,
+    auth_headers,
+    client,
+    make_guest,
+    make_user,
+    settings,
+)
 
 
-def test_signup_login_me():
+def _signed_token(*, audience="authenticated", expires_in=3600):
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    now = int(time.time())
+    claims = {
+        "sub": str(uuid.uuid4()),
+        "aud": audience,
+        "role": "authenticated",
+        "is_anonymous": False,
+        "iat": now,
+        "exp": now + expires_in,
+        "iss": f"{settings.supabase_url.rstrip('/')}/auth/v1",
+    }
+    token = jwt.encode(claims, private_key, algorithm="ES256")
+    return token, private_key.public_key()
+
+
+class _FakeJwks:
+    def __init__(self, public_key):
+        self.public_key = public_key
+
+    def get_signing_key_from_jwt(self, token):
+        return SimpleNamespace(key=self.public_key)
+
+
+def test_me_returns_supabase_identity():
     user, password = make_user(client)
-    assert user["email"].endswith("@example.com")
-    assert user["theme"] == "dark"
-
     headers = auth_headers(client, user["email"], password)
-    r = client.get("/api/auth/me", headers=headers)
-    assert r.status_code == 200
-    assert r.json()["id"] == user["id"]
+    response = client.get("/api/auth/me", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["id"] == user["id"]
+    assert body["email"] == user["email"]
+    assert body["is_anonymous"] is False
 
 
-def test_signup_duplicate_email():
-    user, _ = make_user(client)
-    r = client.post(
-        "/api/auth/signup",
-        json={"email": user["email"], "password": "another-secret-1"},
-    )
-    assert r.status_code == 409
-
-
-def test_signup_validation():
-    r = client.post(
-        "/api/auth/signup",
-        json={"email": "not-an-email", "password": "secret123"},
-    )
-    assert r.status_code == 422
-    r = client.post(
-        "/api/auth/signup",
-        json={"email": "tiny@example.com", "password": "short"},
-    )
-    assert r.status_code == 422
-
-
-def test_login_wrong_password():
-    user, _ = make_user(client)
-    r = client.post(
-        "/api/auth/login",
-        json={"email": user["email"], "password": "wrong-password-1"},
-    )
-    assert r.status_code == 401
-
-
-def test_me_requires_auth():
-    r = client.get("/api/auth/me")
-    assert r.status_code == 401
-    r = client.get("/api/auth/me", headers={"Authorization": "Bearer junk"})
-    assert r.status_code == 401
+def test_guest_identity_is_anonymous():
+    guest, headers = make_guest(client)
+    response = client.get("/api/auth/me", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["id"] == guest["id"]
+    assert body["email"] is None
+    assert body["is_anonymous"] is True
 
 
 def test_update_profile_theme():
     user, password = make_user(client)
     headers = auth_headers(client, user["email"], password)
-    r = client.patch("/api/auth/me", json={"theme": "light"}, headers=headers)
-    assert r.status_code == 200
-    assert r.json()["theme"] == "light"
-    r = client.patch("/api/auth/me", json={"theme": "neon"}, headers=headers)
-    assert r.status_code == 422
+    response = client.patch(
+        "/api/auth/me", json={"theme": "light"}, headers=headers
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["theme"] == "light"
+    response = client.patch(
+        "/api/auth/me", json={"theme": "neon"}, headers=headers
+    )
+    assert response.status_code == 422
 
 
-def test_delete_account_removes_everything():
+def test_delete_account_revokes_supabase_user():
     user, password = make_user(client)
     headers = auth_headers(client, user["email"], password)
-    r = client.post(
-        "/api/sessions",
-        json={"language": "python", "code": "x = 1"},
-        headers=headers,
-    )
-    assert r.status_code == 201
+    response = client.delete("/api/auth/me", headers=headers)
+    assert response.status_code == 204, response.text
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+    assert admin_get_user(user["id"]) is None
 
-    # Wrong password refuses.
-    r = client.request(
-        "DELETE", "/api/auth/me", json={"password": "nope-nope-nope"}, headers=headers
-    )
-    assert r.status_code == 401
 
-    r = client.request(
-        "DELETE", "/api/auth/me", json={"password": password}, headers=headers
-    )
-    assert r.status_code == 204
+def test_requests_without_token_are_rejected():
+    response = client.get("/api/auth/me")
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
 
-    # The token no longer resolves to a user.
-    r = client.get("/api/auth/me", headers=headers)
-    assert r.status_code == 401
+
+def test_expired_token_is_rejected(monkeypatch):
+    token, public_key = _signed_token(expires_in=-10)
+    monkeypatch.setattr(client.app.state, "jwks_client", _FakeJwks(public_key))
+    response = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_wrong_audience_is_rejected(monkeypatch):
+    token, public_key = _signed_token(audience="anon")
+    monkeypatch.setattr(client.app.state, "jwks_client", _FakeJwks(public_key))
+    response = client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 401
