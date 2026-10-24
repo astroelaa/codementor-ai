@@ -309,6 +309,16 @@ contract stays identical.
   variables `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, and
   `VITE_SUPABASE_ANON_KEY`.
 
+## Assignment submission
+
+The complete Supabase architecture, RLS table inventory, policy pattern, and
+isolation experiment results are documented in
+[docs/supabase-submission.md](docs/supabase-submission.md).
+
+The live two-account experiment was completed on both production frontends:
+account A created a private project, account B saw no projects and could not
+open account A's project URL, and both test accounts were deleted afterward.
+
 ## Backup and recovery
 
 - **Supabase Postgres**: use Supabase backups / point-in-time recovery from the
