@@ -274,8 +274,9 @@ say the word if you want it and can supply the key.
 ## 11. Environment configuration
 
 Backend (`backend/.env`, git-ignored; see `backend/.env.example`):
-`ENVIRONMENT`, `DATABASE_URL` (secret in prod), `JWT_SECRET` (secret, ≥32 in
-prod), `ALLOWED_ORIGINS`, `LLM_PROVIDER`, `LLM_FALLBACKS`, `LLM_MODEL`,
+`ENVIRONMENT`, `DATABASE_URL` (secret in prod), `SUPABASE_URL`,
+`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_ORIGINS`,
+`LLM_PROVIDER`, `LLM_FALLBACKS`, `LLM_MODEL`,
 `LLM_API_KEY`, `GROQ/GEMINI/OPENAI/ANTHROPIC_API_KEY` (secrets),
 `GROQ/GEMINI/OPENAI/ANTHROPIC_MODEL`, `LLM_TIMEOUT_SECONDS`,
 `LLM_MAX_TOKENS`, `RATE_LIMIT_SIGNUP/LOGIN/MENTOR`, `MAX_HINTS_PER_SESSION`,
